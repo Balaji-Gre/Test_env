@@ -1,0 +1,63 @@
+# Databricks notebook source
+# MAGIC %md ###Generate Consolidated Reports
+
+# COMMAND ----------
+
+#dbutils.widgets.removeAll()
+#dbutils.widgets.text("environment", "dev")
+#dbutils.widgets.text("reportType", "UK")
+#dbutils.widgets.text("folder", "test/hierarchy analysis/product")
+dbutils.widgets.text("encoding", "UTF-8")
+environment = dbutils.widgets.get("environment")
+reportType = dbutils.widgets.get("reportType")
+folder = dbutils.widgets.get("folder")
+encoding = dbutils.widgets.get("encoding")
+
+# COMMAND ----------
+
+from configparser import ConfigParser
+from functools import reduce
+from pyspark import SparkConf, SparkContext
+from pyspark.sql.session import SparkSession
+from pyspark.sql import DataFrame
+from pyspark.sql.functions import *
+
+# COMMAND ----------
+
+def readCSV(file):
+  df = spark.read.format('csv').options(header='true', inferSchema='false', quote='"', escape='\\', delimiter=',', encoding=encoding, ignoreLeadingWhiteSpace='true', multiline='true').load(file)
+  
+  df = df.select(['COUNTRY_CODE', 'COUNTRY', 'CATEGORY_NAME', 'PROD_TAG', 'LONG_HARMONIZED', 'MANUFACTURER', 'BRAND', 'SUB_BRAND', 'SUBCATEGORY', 'WEIGHT_RANGE', 'STANDARD_WEIGHT', 'QUANTITY', 'ITEM_ID', 'BAR_CODE', 'MANUFACTURER_HARMONIZED', 'BRAND_HARMONIZED', 'SUBBRAND_HARMONIZED', 'CATEGORY_HARMONIZED', 'SUBCATEGORY_HARMONIZED', 'SINGLE_MULTI_HARMONIZED', 'STANDARD_WEIGHT_HARMONIZED', 'QUANTITY_HARMONIZED', 'TOTAL_WEIGHT_HARMONIZED', 'CHOCOLATE_TYPE_HARMONIZED', 'PRICE_SEGMENT', 'KIDS_HARMONIZED', 'FLAVOUR_HARMONIZED', 'PROMO_HARMONIZED', 'INNOVATION_FLAG', 'INNOVATION_SKU', 'FORMAT_HARMONIZED', 'PACK_TYPE_HARMONIZED', 'OCCASION_HARMONIZED', 'MATERIAL_HARMONIZED', 'INCLUSIONS_HARMONIZED', 'COCOA_PERC', 'SEGMENT_HARMONIZED', 'SUB_SEGMENT_LEVEL_2_HARMONIZED', 'INSTANT_COFFEE_TYPE_HARMONIZED', 'INSTANT_COFFEE_SUBTYPE_HARMONIZED', 'VARIETY_HARMONIZED', 'LEVEL_OF_CAFFEINE_HARMONIZED', 'ORGANIC_CLAIM_HARMONIZED', 'COFFEE_FORM_HARMONIZED', 'COFFEE_GROUP_HARMONIZED', 'NUMBER_CAPSULES_HARMONIZED', 'NUMBER_IN_PACK_HARMONIZED', 'NUMBER_SERVINGS_HARMONIZED', 'PACKAGING_TYPE_HARMONIZED', 'PRICE_SEGMENT_HARMONIZED', 'PROMOTION_TYPE_HARMONIZED', 'FAIRTRADE_CERTIFICATION_HARMONIZED', 'VARIANT_HARMONIZED', 'ROAST_OF_COFFEE_CLAIM_HARMONIZED', 'STRATEGIC_PORTFOLIO_FLAG', 'PRODUCT_INCLUSION_FLAG', 'MASH_INCLUSION_FLAG', 'MAJOR_SUBBRAND_HARMONIZED','LAUNCH_DATE', 'INNOVATION_TYPE'])
+  
+  return df
+
+# COMMAND ----------
+
+filePath= "dbfs:/mnt/"+folder+"/"
+fileList = dbutils.fs.ls(filePath)
+
+#files = list(filter(lambda x: reportType in x.name, fileList))
+files = [x.path for x in fileList if reportType in x.name]
+
+df_out = readCSV(files[0])
+total_count = readCSV(files[0]).count()
+
+for i in range(0, len(files)-1):
+  df_out = df_out.unionByName(readCSV(files[i+1]))
+  total_count = total_count + readCSV(files[i+1]).count()
+
+# COMMAND ----------
+
+filepath = '/mnt/cdfoutbound/EXPORT/Confectionery/Reference_Product'
+
+df_out.select(['COUNTRY_CODE', 'COUNTRY', 'CATEGORY_NAME', 'PROD_TAG', 'LONG_HARMONIZED', 'MANUFACTURER', 'BRAND', 'SUB_BRAND', 'SUBCATEGORY', 'WEIGHT_RANGE', 'STANDARD_WEIGHT', 'QUANTITY', 'ITEM_ID', 'BAR_CODE', 'MANUFACTURER_HARMONIZED', 'BRAND_HARMONIZED', 'SUBBRAND_HARMONIZED', 'CATEGORY_HARMONIZED', 'SUBCATEGORY_HARMONIZED', 'SINGLE_MULTI_HARMONIZED', 'STANDARD_WEIGHT_HARMONIZED', 'QUANTITY_HARMONIZED', 'TOTAL_WEIGHT_HARMONIZED', 'CHOCOLATE_TYPE_HARMONIZED', 'PRICE_SEGMENT', 'KIDS_HARMONIZED', 'FLAVOUR_HARMONIZED', 'PROMO_HARMONIZED', 'INNOVATION_FLAG', 'INNOVATION_SKU', 'FORMAT_HARMONIZED', 'PACK_TYPE_HARMONIZED', 'OCCASION_HARMONIZED', 'MATERIAL_HARMONIZED', 'INCLUSIONS_HARMONIZED', 'COCOA_PERC', 'SEGMENT_HARMONIZED', 'SUB_SEGMENT_LEVEL_2_HARMONIZED', 'INSTANT_COFFEE_TYPE_HARMONIZED', 'INSTANT_COFFEE_SUBTYPE_HARMONIZED', 'VARIETY_HARMONIZED', 'LEVEL_OF_CAFFEINE_HARMONIZED', 'ORGANIC_CLAIM_HARMONIZED', 'COFFEE_FORM_HARMONIZED', 'COFFEE_GROUP_HARMONIZED', 'NUMBER_CAPSULES_HARMONIZED', 'NUMBER_IN_PACK_HARMONIZED', 'NUMBER_SERVINGS_HARMONIZED', 'PACKAGING_TYPE_HARMONIZED', 'PRICE_SEGMENT_HARMONIZED', 'PROMOTION_TYPE_HARMONIZED', 'FAIRTRADE_CERTIFICATION_HARMONIZED', 'VARIANT_HARMONIZED', 'ROAST_OF_COFFEE_CLAIM_HARMONIZED', 'STRATEGIC_PORTFOLIO_FLAG', 'PRODUCT_INCLUSION_FLAG', 'MASH_INCLUSION_FLAG', 'MAJOR_SUBBRAND_HARMONIZED','LAUNCH_DATE', 'INNOVATION_TYPE']).distinct().coalesce(1).write.format("com.databricks.spark.csv").options(header='true', delimiter = ',', inferSchema='false', quote='"', ignoreLeadingWhiteSpace='true', emptyValue='', encoding = encoding).save(filepath, mode="overwrite")
+
+print('sum of counts of individual files: '+str(total_count))
+print('output file count: '+str(df_out.count()))
+
+# COMMAND ----------
+
+files = dbutils.fs.ls(filepath)
+csv_file = [x.path for x in files if x.path.endswith(".csv")][0]
+dbutils.fs.cp(csv_file, (filepath.rstrip('/'))+".csv")
+dbutils.fs.rm(filepath, recurse = True)
