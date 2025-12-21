@@ -1,0 +1,576 @@
+
+https://docs.getdbt.com/docs/introduction
+
+https://discourse.getdbt.com 
+
+dbt is a transformation framework that enables analysts and engineers collaborate with their shared knowledge of SQL to deploy analytics code following software engineering best practices like modularity, portability, CI/CD, and documentation. dbt’s analytics engineering workflow helps teams work faster and more efficiently to produce data the entire organization can trust.
+
+
+******DBT******
+
+DBT Course Curriculum 
+Module 1: 
+• ETL VS ELT
+• DBT Introduction
+• DBT Usage
+Module 2: 
+• Set up DBT
+Module 3: 
+• Models Overview
+• View Materialization
+• Table Materialization
+• Incremental Materializations
+• Ephemeral Materializations
+• Table Materialization Vs Project Materialization
+• Pros and Cons of Materialization 
+Module 4: 
+• Pre-hooks & Post- hooks
+Module 5: 
+• Jinja Templates overview
+• Jinja Templates use cases
+• Jinja dbt functions
+Module 6: 
+• Macros Predefined
+• Macros custom use cases 
+Module 7: 
+• Snapshots
+• Seeds
+• Sources
+• Analyses 
+• Exposures 
+
+---DBT files and folders structure
+--Profiles.yml: It has all connection details like Snowflake account name, Username and Password etc
+--DBT_projects.yml:
+
+
+
+
+DBT -- CORE -- install process 
+
+Venv-- logically separate the packages difference version 
+dbt init -- project name to initialise the project
+
+ls -a to see the hidden folders in Linux(.)
+profiles.yml file need to configure your connection sf to dbt
+:wq save the file 
+ls -a : to find the hidden files in the linux 
+if we intilize the init function i will create the .dbt folder 
+
+dbt debug to test the connection if all check pass it is connected.
+:q exit the file 
+
+dbt debug : to test the connection --  should beall checks passed
+
+
+***Project Configuration Files:**
+
+To configure all the project related things in yml files:
+
+--> If you're using dbt Core, you'll need a profiles.yml file that contains the connection details for your data platform. configurartion service account by using credentials of snowflake  -- https://docs.getdbt.com/docs/core/connect-data-platform/connection-profiles
+
+--> dbt_project.yml -- (if we have to pass any {var} variable in code level  need to declear in dbt_project.yml)
+profiles.yml
+
+-->source.yml( source : to configure raw data details ) -- need to give the all details like schema, database, table name in the source file 
+
+-->for every table need to create the seprate source.yml file, with the detalil OF DATABASE, SCHEMA, TABLE names.
+
+-->If we working a table very first time table is not present in the target level need to create the sperate source.yml file for the tale
+
+-->Apache Airflow is a workflow management tool run and manages the jobs(DAG) used to schedule the DBT jobs(USING THE PYTHON CODE(bash operators) ) for DBT CLI
+
+Integrated with the (version control )-- Git, bit bucket for the easy deployment.
+
+Data lineage is : from which table to which table the data is flowing 
+
+Types of data loading
+
+Incremental load  
+Insert_merge
+Truncate and load
+---
+
+
+***Components used in DBT transformations***
+
+Models: it is a kind of  sql file where we can create the business logic to transform the data (sql code)
+
+Model has the 4 types of Materializations
+
+1.Table: used for the full load
+2.view: your model is rebuilt as a view on each run
+3.Incremental : changed, inserted data that can be identified by
+by AT_timesamp(max time) inserted_at_timestamp> max(inserted_at_timestamp)
+  
+Incremental : Newly added data reduce the time to do transformation
+
+ephemeral : CTE reuses the same query temporary name(we can use multiple times)
+
+
+Materializations in dbt Models.
+
+View:
+When using the view  materialization, your model is rebuilt as a view on
+each run, via a create view as statement.
+
+Pros: No additional data is stored, views on top of source data will
+always have the latest records in them.
+Cons: Views that perform significant transformation are slow to query.
+
+Table:
+When using the table materialization, your model is rebuilt as a table on
+each run, via a create table as statement.
+
+Pros: Tables are fast to query
+Cons: New records in underlying source data are not automatically
+added to the table;
+
+
+Incremental:
+
+incremental models allow dbt to insert or update records into a table
+since the last time that dbt was run. based on (unique_id) 
+
+select max(inserted_at) from DEV.RAW_DATA.EMP_STG
+where inserted_at >= '2023-01-01 00:00:00'
+insted of scaning all the data in table can scan after certain time.
+
+Pros: You can significantly reduce the build time by just transforming
+new records
+
+Cons: Incremental models require extra configuration and are an
+advanced usage of dbt.
+
+Ephemeral:
+
+ephemeral models are not directly built into the database. Instead, dbt
+will interpolate the code from this model into dependent models as a
+common table expression.
+
+Pros: You can still write reusable logic
+Ephemeral models can help keep your data warehouse clean by
+reducing clutter.
+
+Cons: You cannot select directly from this model.
+
+
+***Use cases of Hooks***
+
+Post Hook : After you model run need give permission for table or view 
+
+post hook:Reporting team is accessing your table you can put grant statement in post hook ,Capture the auditing  start time and end time.
+
+after bulding model we want to export data to S3
+put copy statement : export the data after running model 
+
+After query run collect the statistics so that query performance will improve : analyse the table to improve the query performance
+
+creating a share after model run
+
+
+
+  ***Hooks****
+
+If you want to execute the statement before running the model
+ 
+we can use the Pre-Hooks-- if we want to remove the duplicates before running the joining the two tables.
+
+run audit, after created table to provide the access grant user
+
+for collecting the statics to update the query performance
+
+for creating the share after table creation 
+
+
+
+***Use cases of Hooks***
+
+Post Hook : After you model run need give permission for table or view 
+
+post hook:Reporting team is accessing your table you can put grant statement in post hook ,Capture the auditing  start time and end time.
+
+after bulding model we want to export data to S3
+put copy statement : export the data after running model 
+
+After query run collect the statistics so that query performance will improve : analyse the table to improve the query performance
+
+creating a share after model run
+
+ ***post-Hooks**
+ 
+Notification: Send notifications via email, Slack, or other communication channels to inform stakeholders about the completion of the build process or any issues encountered.
+
+Data Validation: Run data validation checks to ensure the integrity and quality of the built data. This could involve verifying data formats, checking for missing values, or validating against predefined business rules.
+
+  ***Jinja templates***
+
+Jinja templates: (we can pass that value in the dbt-project.yml file {var: value}) -- that value Var: can be used in code level 
+ref: is a jinja templates{}
+Jinja templating language we can write the dynamic sql
+replacing the variable names with some values. 
+it is a text file can generate .csv, xml
+it doesn't need any extenstions 
+
+to access the element{{}}t 
+
+for statement {}
+
+Dynamic sql    
+
+{{ config(materialized='table',
+alias='payament_method_aggregation') })
+
+select
+order_id,
+{% for payment_method in ["credit_card/debit_card", "UPI", "Net Banking", "Mobile Wallet"] %}
+sum(case when payment_method = '{{payment_method}}' then amount end) as "{{payment_method} }_amount",
+{% endfor %}
+sum(amount) as total_amount
+from raw_data.payments
+group by 1
+
+another way 
+
+{% set pmlist=["credit_card/debit_card", "UPI", "Net Banking", "Mobile Wallet"] %}
+
+select
+order_id,
+{% for payment_method in pmlist %}
+sum(case when payment_method = '{{payment_method}}' then amount end) as "{{payment_method}}_amount",
+{% endfor %}
+
+
+Static sql 
+
+select
+order_id,
+sum(case when payment_method = 'credit_card/debit_card' then amount end) as cc_db_amount,
+sum(case when payment_method = 'UPI' then amount end) as upi_amount,
+sum(case when payment_method = 'Net Banking' then amount end) as net_banking_amount,
+sum(case when payment_method = 'Mobile Wallet' then amount end) as mobile_wallent_amount,
+sum(amount) as total_amount
+from RAW_DATA
+group by 1
+
+code reusablility: using the sql jinga templates and macros.   : remove the code duplicates for all the 100 tables we can use the same code 
+if want to create the same table in the differnt data bases : by using the variable name we can create the table in all database singletime. 
+
+
+
+                     *** Macro***
+					 
+Macros: code reusablility: using the sql jinga templates (stored procedures) reuse by passing the variable names
+
+Macros : -- https://noahlk.medium.com/three-dbt-macros-i-use-every-day-2966b3ad9b26
+
+useful if you find yourself repeating code across multiple models. Macros are defined in .sql files, typically in your macros directory (docs).
+
+write reusable code(function) in once can use multiple times.
+
+standalone macro  we can't run we can run in model 
+
+two types of macros
+
+1.userdefined -- remove duplicates.
+
+2.predifined 
+
+****Macro is a jinja template language***
+
+Macro: (remove duplicates)if we have 100 tables we don't want to write a code for 100 times we can write once use for all tables 
+
+we use to call that macro in pre-hook to remove the duplicates before running a model 
+
+Standalone macro we can' run Need to run it from model prehook or select statement 
+
+ex : convert temperature column dg_to_fh  from table.
+User defind Macro: for Auditing like tables, rows 
+
+
+   ***Sanpshots*** : 
+   
+Sanpshots : to capture the historiacal changes on tables -- the data inserted, updated, deleted, columns like ETL_CREATE_DTTM, MDFY_DTM, EFF_DT
+
+In SCD we can use EFF_START_DT, EFF_END_DT to track the historical changes
+ 
+Dbt_valid_from , Dbt_valid_t
+
+snapshot can't rebuild the table it can't capture all changes
+
+time_stamp column to identify the changes.
+
+it can run independently not like as macro 
+
+{{ ref() is a jinja function which can refer another model }}
+
+we can use pre-hook, post-hook before running a snapshot
+
+
+ Sources functions: configure source details in yml file.
+
+source jinja function to define data lineage.
+Source freshness.
+
+.Testing your sources.
+.Document sources.
+
+
+Ref : function refer to another model, seeds, snapshots
+
+source: paricular table {(' ', ' ')}
+
+source freshness : based on the last updated time stamp
+
+select max(inserted_at) from DEV.RAW_DATA.EMP_STG
+where inserted_at >= '2023-01-01 00:00:00'
+insted of scaning all the data in table can scan after certain time.
+
+
+
+
+****Analysis:***
+it can only compile  not execute in DWH 
+we can understand the query for ad-hoc analysis
+
+Target: store logs all our queries that are generated and complied
+ 
+DBT build : it is a combination of dbt run & test 
+
+use code as model.
+
+Take the query put it in a report.
+
+
+***Jinja templets***
+
+A generic mail if you want to send multiple users 
+
+
+Ex: {{ ref() }}
+
+programmatic support -- looping branch etc
+{%....%} -- Statement 
+
+{{ ---}} -- expression
+
+{{.#...#}} -- comment 
+
+
+
+***seeds***
+
+lkp table in DWH  which may not change frequently Static data.
+like country code zip code
+
+Sources: it is Jinja function To describe details about Raw data
+
+source: for particular table only
+advantages: 
+better lineage diagram 
+source freshness by using timestamp column
+testing your sources and documentation
+
+
+**** TEST***
+
+TESE: is used to check the quality of data DBT supports some constraints to check the quality of data(PK, FK, NOT NULL, UNIQUE, CHECK AND Default) 
+1.singular test: it can be applied for only one model
+
+custom test for negative things revenue calculation  negative(-1) if negative values it fails outher wise pass
+
+2.generic tests  : it can be applied accross models
+
+unique
+not null
+domain values
+refrence integrity
+
+Generic tests can be used 
+models (curated data )
+source(raw data )
+seeds 
+snapshots 
+
+Unit testing
+
+regression testing 
+
+we can define the test in a model on the .yml file 
+
+Customized generic test : 
+@--> validate the Gmail id if @ present or not
+
+
+-----
+
+Version control tool(git hub), git bash, visual studio for code traking
+
+--> GIT Process
+
+1.clone repository (copy of main branch)
+2.create your custom branch (cust btanc1) -- under the release branch 
+3.remote custom Branch (push)
+4.pull request to main branch (reviewer)
+
+***Deployement*** :
+
+one -trunk DEV-to-PROD
+
+main branch: fb1 + fb2 -- Main branch : copy of production data 
+
+feature branch1: ut
+feature branch2: ut
+
+two -trunk: DEV-to-QA-PROD
+
+feature branch1: ut
+feature branch2: ut
+
+QA: fb1+fb2 -- Integration testing 
+
+QA -- > main
+
+for schedule job cron expression or we  run can manual
+
+
+
+
+
+
+
+
+
+**** KEY POINTS ****
+
+Dbt Automated the process for high env (Data ops)
+
+deployments is an automated process 
+
+dbt tightly coupled with version control tool and deployment process 
+
+if we click on commit and sync -- the code will be reflect in the git folder 
+
+DBT supports some constraints to check the quality of 
+data(PK, FK, NOT NULL, UNIQUE, CHECK AND Default)
+
+***Usage of Test folder**
+
+customised script to check the sales is not 
+negative to check data quality, validate and  testing process is an automed process 
+
+
+data lineage Diagram (data flow diagram): dependency graph For jobs we ued in the model (how the data is flowing from which table to which table)
+
+Create the documentation for the purpose of this job
+
+
+(ref) --function to select from other models
+(Source)-- function to select data from the table 
+
+{{}} --- Jinja templates
+
+DBT always runs our SQL code on the DWH 
+
+DBT RUN -- to run all models in folder 
+
+
+
+Example of model structure
+
+Model format have 
+<Config section>
+start
+
+<parameter 1>
+<parameter 2>
+...
+..
+<select statement>
+
+Full load, Incremental load, Truncate Load
+
+View: can transform the entire volume of data
+
+
+Incremental: can transform the changed data
+Inseted_At_timestamp
+
+
+ephemeral :(CTE) no need to write multiple time 
+standalone ephemeral model will not use it has to use some where in common logic
+ex: emp avg_sal
+
+what is difference between pre-hook, pre-run ?
+
+Use Cases for Pre-Run Hooks
+Setting Session Parameters: For databases like Snowflake, you might want to set certain session parameters before running your queries.
+Creating Temporary Tables: You might need to create temporary tables or staging tables that are required for the main transformation.
+Logging and Auditing: Insert logs or audit records to track when models are run.
+Clearing Previous Data: Removing or truncating data in staging tables or intermediate steps.
+
+what is difference between pre-hook, pre-run 
+
+how to run the  particular models in the accross the folders? : dbt run we can give all files name 
+
+publish source and reference difeerence 
+
+publish source : directly fetching from the table data
+reference(ref) : can be refer the code present in the another model
+
+
+
+--------------------------Real time points--------------------------------------
+DBT execution steps --
+STEP 1: activate the virtual env
+cd C:\PythonVenv\sf-dbt-dev\Scripts\
+.\Activate.ps1
+ 
+STEP 2: go to the right directory -- where you have clone the git and the project you are currently working
+cd "C:\Users\NBKumariSw\OneDrive - NESTLE\sf-dp-repos\SupplyChain\WarehouseManagement\SupplyChainandProcurement\dbt\app-11325-at-WM"
+ 
+STEP 3: set variable for the session
+$env:SF_DEVELOPER_USERNAME = "<user_name>"
+
+user: "{{ env_var('SF_DEVELOPER_USERNAME')}}"
+ 
+run below commands from below path 
+cd "C:\Users\NBKumariSw\OneDrive - NESTLE\sf-dp-repos\SupplyChain\WarehouseManagement\SupplyChainandProcurement\dbt\app-11325-at-WM"
+ 
+git config --global user.name "Subbareddy Kake"
+git config --global user.email "subbareddy.kake@nestle.com"
+
+PS C:\Users\NBKakeSu\OneDrive - NESTLE\REPO\SupplyChainandProcurement> cd C:\PythonVenv\sf-dbt-dev\Scripts\
+PS C:\PythonVenv\sf-dbt-dev\Scripts> .\Activate.ps1
+
+
+
+1.what is a model in dbt.
+2.models configuration:
+3.how does dbt vary from other tools:
+4.difference between source and ref.
+5.what is snapshot:
+6. what materialization options are available in dbt?
+7.what is the difference between ephermal , incremental and dynamic table or materialized view.
+8.what is macro in dbt:
+9.what is the diffrence between dbt build and dbt run:
+10.how can you run all of the models in your dbt project folder except one?
+11.how can we do full refresh  for model in dbt
+12.could you please explain what is yml file in dbt file why it is called heart of the project
+13.how can i run all tests in dbt.
+14.how dbt maintain version control?
+15. which language you have used to write macros in dbt?
+16.how can schedule jobs in dbt?
+17.what will happen if you refer one model into another model in dbt?
+18.write a one simple micro.
+19.how do you handle performance problems in dbt.
+20.what is incrematal_strategy what is the use of this one.
+
+
+
+
+
+
+
+
+ 
