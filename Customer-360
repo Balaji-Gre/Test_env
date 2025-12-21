@@ -1,0 +1,167 @@
+Breakdown of Key Data Elements
+- Datamarts:
+  - Total: 6 Datamarts
+  - Additional: 3 Purge Datamarts
+- Intermediate Tables:
+  - Total: 15 Intermediate Tables
+- Views:
+  - Total: 23 Views
+- Attributes:
+  - Over 410 Attributes have been developed.
+
+  - A structured explanation of how data transitions through various stages 
+
+
+Datamart
+Provide aggregated, customer-centric datasets for segmentation, marketing, and analytics.
+
+
+loyality_customer_dm:
+Stores loyalty-related information, such as:
+     - External customer ID
+     - Profile data (first name, last name, email, phone number, date of birth)
+     - Enrollment details (date, brand, account status)
+     - Previous and current loyalty tiers
+     - Language preferences and brand notification subscriptions
+
+credit_card_account_datamart:
+Contains customer credit card information, specifically Barclay cards
+
+Online_sales_dm & store_sales_dm:
+Online and in-store transactions, such as order IDs, order dates, 
+transaction types (sale, return, exchange, refund), shipping and billing details, and dollar amounts
+Example: original ticket price, current price, paid price, retail price).
+
+brand_country_customer_dm:
+Contains customer details at the brand and country level
+
+brand_country_customer_email_dm:
+Stores customer details at the brand and email combination level
+
+
+namepush_history:
+Tracks customer activity and inactivity
+
+credit_card_account_overall:
+Includes both Barclay and old Synchrony cards for identifying active customers,also Differentiates between active and inactive customers
+corp_customer_inactive (which will help us identify through the process of activity inactivity of a customer
+
+Corp_Cust_Inactive:
+Identifies customer inactivity.
+
+********************
+Intermediate table:
+ Serve as a pre-processing layer to optimize runtime, specific to imperities use cases where this has been built in order to have multiple logical attributes built in specific to amperity
+
+-agg_sales_delta
+-agg_unified    
+
+above both tables are specific to transaction systems which will help with the transactions which has to be projected 
+and their corresponding attributes to multiple views
+
+brand_customer_fav_traffic
+brand_customer_preg_agg
+
+brand fav traffic or the brand preg AGG, this will have the department level of information or the preference level of information of customers.
+
+email_catalog_full
+email_click_full
+
+The campaign sources which has the emails of customers and they're corresponding occurrences in the system which will help us through 
+few of these attributes that we look at in one of the view which will be like the number of occurrences of a specific e-mail over 
+a specific period of time of seven days, 10 days, 15 days or one month.
+
+store_mapping_fishing_transaction - is designed to identify historical transactions involving customers or card information over a two-year period.
+It enables the identification of:
+  Transactions that were previously untagged or unattended.
+  - Transactions where card information was tagged but not linked to a customer initially.
+  - Recently identified customers whose transactions are now being associated with their card information.
+
+
+store_online_timezone_temp
+
+Intermediate table that contains time zone details for customer brand countries. 
+It is part of the data flow process used to manage and analyze customer transactions and preferences across different time zones.
+
+
+transaction_agg_temp - which will have the brand country level of information of the transactions which is worth of about three years which we have.
+
+oms_first_purchase_mds_hist -    Refers to the historical data capturing the first purchase made by a customer in the OMS (Online Management System).
+
+store_first_purchase_mds_hist -    Refers to the historical data capturing the first purchase made by a customer in the store 
+
+ 
+
+Views: 
+Act as the final data layer consumed by downstream systems, offering a comprehensive and tailored dataset for business needs.
+
+The 23 views are categorized into 7 different categories**, However, only two categories and their corresponding 
+
+  1. Products & Transactions:
+     - Unified_Transactions_GAP
+     - Corp_Line_Item
+     - Transactions_agg
+     - MDSE_fav
+  2. Preferences:
+     - Web_Behavior
+     - Brand_Customer_Pref_Agg
+     - Do_Not_Sell_Share
+     - Brand_Customer_Fav_Traffic
+
+23 views divided into 7 categories
+
+Mainly divided into two parts: Products and Transactions, Preference Category Views
+
+Campaign
+- Mailing_Mail_House: Used for managing and tracking campaign-related mailing activities.
+
+-Customer
+- Corp_Customer_Base: Provides a comprehensive view of the corporate customer base.
+- Corp_Credit_Card: Contains details about corporate credit card usage.
+- Corp_Brand_Email: Tracks email interactions related to corporate brands.
+- Corp_Household: Offers insights into household-level customer data.
+- Corp_Brand_Customer: Focuses on customer interactions with specific corporate brands.
+- Customer_Demographic: Stores demographic information about customers.
+- Email_Source: Tracks the source of email communications.
+- Source_Code: Contains codes related to customer sources for segmentation or analysis.
+
+Loyalty
+- Corp_Loyalty: Represents membership profiles and loyalty program details.
+- Customer_Points: Tracks customer points and their accumulation across the system.
+- Progress_To_Tier: Monitors customer progression through loyalty tiers, including previous, current, and next tiers.
+
+Store & Product
+- Corp_Store: Provides store-level information.
+- Store_Distance_Zip: Contains data on store locations and their proximity to customer zip codes.
+
+Model Scores
+- Propensity_Models: Includes model score inputs from data science teams, used for predictive analytics and customer behavior modeling.
+
+Products and Transactions Views
+The "Products and Transactions" category includes views that focus on transaction-level details,
+ either at the line or header level. These views provide insights into customer transactions and product-related data. 
+The specific views under this category are:
+
+- Unified_Transactions_GAP: Contains unified transaction data for customers.
+- Corp_Line_Item: Focuses on line-item-level transaction details.
+- Transactions_agg: Aggregated transaction data for analysis.
+- MDSE_fav: Highlights merchandise preferences or favorites.
+
+Preferences Views
+The "Preferences" category includes views that capture customer preferences, web behavior, and opt-out information. 
+These views are designed to provide insights into customer behavior and preferences. The specific views under this category are:
+
+-  Web_Behavior: Tracks customer web behavior data.
+-  Brand Customer Pref Agg: Aggregates customer preferences at the brand level.
+-  Do Not Sell Share: Identifies customers who have opted out of sharing their information.
+-  Brand Customer Fav Traffic: Captures customer preferences and traffic data related to specific brands.
+
+
+
+select * from gdp_pii_prod.customer360.online_sales_dm
+ 
+select * from gdp_pii_prod.customer360_intermediate.agg_unified
+ 
+ 
+select * from gdp_pii_prod.customer360.online_sales_dm where amp_order_id='IXYQJFW' and amp_order_date = "2024-07-18"
+ 
