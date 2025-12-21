@@ -1,0 +1,44 @@
+# Databricks notebook source
+from pyspark.sql.functions import col, lit, StringType, coalesce
+
+# COMMAND ----------
+
+dbutils.widgets.removeAll()
+dbutils.widgets.text("country_code", "PT")
+dbutils.widgets.text("encoding", "UTF-8")
+dbutils.widgets.text("filename", "PT")
+country_code = dbutils.widgets.get("country_code")
+encoding = dbutils.widgets.get("encoding")
+filename = dbutils.widgets.get("filename")
+
+# COMMAND ----------
+
+file = '/mnt/cdfoutbound/EXPORT/Confectionery/'+filename+'.xlsx'
+df = spark.read.format("com.crealytics.spark.excel").options(header='true', inferSchema = 'false').load(file)
+
+file_override = '/mnt/cdfoutbound/EXPORT/Confectionery/Config/Manufacturer_Overrides.xlsx'
+df_ovr = spark.read.format("com.crealytics.spark.excel").options(header='true', inferSchema = 'false').load(file_override)
+
+file_npd = '/mnt/cdfoutbound/EXPORT/Confectionery/Config/Reference_Product_NPD.xlsx'
+df_npd = spark.read.format("com.crealytics.spark.excel").options(header='true', inferSchema = 'false').load(file_npd).select(['COUNTRY_CODE', 'CATEGORY_NAME', 'PROD_TAG' ,'LAUNCH_DATE', 'INNOVATION_TYPE', 'INNOVATION_SKU'])
+
+
+# COMMAND ----------
+
+if country_code == 'GLBL':
+  df_out = df.withColumnRenamed('MANUFACTURE', 'MANUFACTURER').withColumn('SEGMENT_HARMONIZED', lit(None).cast(StringType())).withColumn('SUB_SEGMENT_LEVEL_2_HARMONIZED', lit(None).cast(StringType())).withColumn('INSTANT_COFFEE_TYPE_HARMONIZED', lit(None).cast(StringType())).withColumn('INSTANT_COFFEE_SUBTYPE_HARMONIZED', lit(None).cast(StringType())).withColumn('VARIETY_HARMONIZED', lit(None).cast(StringType())).withColumn('LEVEL_OF_CAFFEINE_HARMONIZED', lit(None).cast(StringType())).withColumn('ORGANIC_CLAIM_HARMONIZED', lit(None).cast(StringType())).withColumn('COFFEE_FORM_HARMONIZED', lit(None).cast(StringType())).withColumn('COFFEE_GROUP_HARMONIZED', lit(None).cast(StringType())).withColumn('NUMBER_CAPSULES_HARMONIZED', lit(None).cast(StringType())).withColumn('NUMBER_IN_PACK_HARMONIZED', lit(None).cast(StringType())).withColumn('NUMBER_SERVINGS_HARMONIZED', lit(None).cast(StringType())).withColumn('PACKAGING_TYPE_HARMONIZED', lit(None).cast(StringType())).withColumn('PROMOTION_TYPE_HARMONIZED', lit(None).cast(StringType())).withColumn('FAIRTRADE_CERTIFICATION_HARMONIZED', lit(None).cast(StringType())).withColumn('VARIANT_HARMONIZED', lit(None).cast(StringType())).withColumn('ROAST_OF_COFFEE_CLAIM_HARMONIZED', lit(None).cast(StringType())).withColumnRenamed('MANUFACTURER_HARMONIZED', 'MANUFACTURER_HARMONIZED_OLD').join(df_ovr, on = ['MANUFACTURER_HARMONIZED_OLD'], how = 'left').join(df_npd, on = ['COUNTRY_CODE', 'CATEGORY_NAME', 'PROD_TAG'], how = 'left').withColumn("MANUFACTURER_HARMONIZED", coalesce(col("MANUFACTURER_HARMONIZED"), lit("ALL OTHERS"))).select(['COUNTRY_CODE', 'COUNTRY', 'CATEGORY_NAME', 'PROD_TAG', 'LONG_HARMONIZED', 'MANUFACTURER', 'BRAND', 'SUB_BRAND', 'SUBCATEGORY', 'WEIGHT_RANGE', 'STANDARD_WEIGHT', 'QUANTITY', 'ITEM_ID', 'BAR_CODE', 'MANUFACTURER_HARMONIZED', 'BRAND_HARMONIZED', 'SUBBRAND_HARMONIZED', 'CATEGORY_HARMONIZED', 'SUBCATEGORY_HARMONIZED', 'SINGLE_MULTI_HARMONIZED', 'STANDARD_WEIGHT_HARMONIZED', 'QUANTITY_HARMONIZED', 'TOTAL_WEIGHT_HARMONIZED', 'CHOCOLATE_TYPE_HARMONIZED', 'PRICE_SEGMENT', 'KIDS_HARMONIZED', 'FLAVOUR_HARMONIZED', 'PROMO_HARMONIZED', 'INNOVATION_FLAG', 'INNOVATION_SKU', 'FORMAT_HARMONIZED', 'PACK_TYPE_HARMONIZED', 'OCCASION_HARMONIZED', 'MATERIAL_HARMONIZED', 'INCLUSIONS_HARMONIZED', 'COCOA_PERC', 'SEGMENT_HARMONIZED', 'SUB_SEGMENT_LEVEL_2_HARMONIZED', 'INSTANT_COFFEE_TYPE_HARMONIZED', 'INSTANT_COFFEE_SUBTYPE_HARMONIZED', 'VARIETY_HARMONIZED', 'LEVEL_OF_CAFFEINE_HARMONIZED', 'ORGANIC_CLAIM_HARMONIZED', 'COFFEE_FORM_HARMONIZED', 'COFFEE_GROUP_HARMONIZED', 'NUMBER_CAPSULES_HARMONIZED', 'NUMBER_IN_PACK_HARMONIZED', 'NUMBER_SERVINGS_HARMONIZED', 'PACKAGING_TYPE_HARMONIZED', 'PRICE_SEGMENT_HARMONIZED', 'PROMOTION_TYPE_HARMONIZED', 'FAIRTRADE_CERTIFICATION_HARMONIZED', 'VARIANT_HARMONIZED', 'ROAST_OF_COFFEE_CLAIM_HARMONIZED', 'STRATEGIC_PORTFOLIO_FLAG', 'PRODUCT_INCLUSION_FLAG', 'MASH_INCLUSION_FLAG', 'MAJOR_SUBBRAND_HARMONIZED', 'LAUNCH_DATE', 'INNOVATION_TYPE']).distinct()
+else:
+  df_out = df.filter(col("COUNTRY_CODE")==country_code).withColumn('SEGMENT_HARMONIZED', lit(None).cast(StringType())).withColumn('SUB_SEGMENT_LEVEL_2_HARMONIZED', lit(None).cast(StringType())).withColumn('INSTANT_COFFEE_TYPE_HARMONIZED', lit(None).cast(StringType())).withColumn('INSTANT_COFFEE_SUBTYPE_HARMONIZED', lit(None).cast(StringType())).withColumn('VARIETY_HARMONIZED', lit(None).cast(StringType())).withColumn('LEVEL_OF_CAFFEINE_HARMONIZED', lit(None).cast(StringType())).withColumn('ORGANIC_CLAIM_HARMONIZED', lit(None).cast(StringType())).withColumn('COFFEE_FORM_HARMONIZED', lit(None).cast(StringType())).withColumn('COFFEE_GROUP_HARMONIZED', lit(None).cast(StringType())).withColumn('NUMBER_CAPSULES_HARMONIZED', lit(None).cast(StringType())).withColumn('NUMBER_IN_PACK_HARMONIZED', lit(None).cast(StringType())).withColumn('NUMBER_SERVINGS_HARMONIZED', lit(None).cast(StringType())).withColumn('PACKAGING_TYPE_HARMONIZED', lit(None).cast(StringType())).withColumn('PROMOTION_TYPE_HARMONIZED', lit(None).cast(StringType())).withColumn('FAIRTRADE_CERTIFICATION_HARMONIZED', lit(None).cast(StringType())).withColumn('VARIANT_HARMONIZED', lit(None).cast(StringType())).withColumn('ROAST_OF_COFFEE_CLAIM_HARMONIZED', lit(None).cast(StringType())).withColumnRenamed('MANUFACTURER_HARMONIZED', 'MANUFACTURER_HARMONIZED_OLD').join(df_ovr, on = ['MANUFACTURER_HARMONIZED_OLD'], how = 'left').join(df_npd, on = ['COUNTRY_CODE', 'CATEGORY_NAME', 'PROD_TAG'], how = 'left').withColumn("MANUFACTURER_HARMONIZED", coalesce(col("MANUFACTURER_HARMONIZED"), lit("ALL OTHERS"))).select(['COUNTRY_CODE', 'COUNTRY', 'CATEGORY_NAME', 'PROD_TAG', 'LONG_HARMONIZED', 'MANUFACTURER', 'BRAND', 'SUB_BRAND', 'SUBCATEGORY', 'WEIGHT_RANGE', 'STANDARD_WEIGHT', 'QUANTITY', 'ITEM_ID', 'BAR_CODE', 'MANUFACTURER_HARMONIZED', 'BRAND_HARMONIZED', 'SUBBRAND_HARMONIZED', 'CATEGORY_HARMONIZED', 'SUBCATEGORY_HARMONIZED', 'SINGLE_MULTI_HARMONIZED', 'STANDARD_WEIGHT_HARMONIZED', 'QUANTITY_HARMONIZED', 'TOTAL_WEIGHT_HARMONIZED', 'CHOCOLATE_TYPE_HARMONIZED', 'PRICE_SEGMENT', 'KIDS_HARMONIZED', 'FLAVOUR_HARMONIZED', 'PROMO_HARMONIZED', 'INNOVATION_FLAG','INNOVATION_SKU', 'FORMAT_HARMONIZED', 'PACK_TYPE_HARMONIZED', 'OCCASION_HARMONIZED', 'MATERIAL_HARMONIZED', 'INCLUSIONS_HARMONIZED', 'COCOA_PERC', 'SEGMENT_HARMONIZED', 'SUB_SEGMENT_LEVEL_2_HARMONIZED', 'INSTANT_COFFEE_TYPE_HARMONIZED', 'INSTANT_COFFEE_SUBTYPE_HARMONIZED', 'VARIETY_HARMONIZED', 'LEVEL_OF_CAFFEINE_HARMONIZED', 'ORGANIC_CLAIM_HARMONIZED', 'COFFEE_FORM_HARMONIZED', 'COFFEE_GROUP_HARMONIZED', 'NUMBER_CAPSULES_HARMONIZED', 'NUMBER_IN_PACK_HARMONIZED', 'NUMBER_SERVINGS_HARMONIZED', 'PACKAGING_TYPE_HARMONIZED', 'PRICE_SEGMENT_HARMONIZED', 'PROMOTION_TYPE_HARMONIZED', 'FAIRTRADE_CERTIFICATION_HARMONIZED', 'VARIANT_HARMONIZED', 'ROAST_OF_COFFEE_CLAIM_HARMONIZED', 'STRATEGIC_PORTFOLIO_FLAG', 'PRODUCT_INCLUSION_FLAG', 'MASH_INCLUSION_FLAG', 'MAJOR_SUBBRAND_HARMONIZED', 'LAUNCH_DATE','INNOVATION_TYPE']).distinct()
+
+# COMMAND ----------
+
+filepath = '/mnt/cdfoutbound/EXPORT/Confectionery/Reference_Product_'+filename+'_'+encoding
+
+df_out.coalesce(1).write.format("com.databricks.spark.csv").options(header='true', delimiter = ',', inferSchema='false', quote='"', ignoreLeadingWhiteSpace='true', emptyValue='', encoding = encoding).save(filepath, mode="overwrite")
+
+# COMMAND ----------
+
+files = dbutils.fs.ls(filepath)
+csv_file = [x.path for x in files if x.path.endswith(".csv")][0]
+dbutils.fs.cp(csv_file, (filepath.rstrip('/'))+".csv")
+dbutils.fs.rm(filepath, recurse = True)
