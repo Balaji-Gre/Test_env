@@ -1,0 +1,155 @@
+Datra Engineer
+--------------
+SQL,Python basics
+
+different source extractions (file system :jason files,xml files) database
+
+KAFKA
+
+basics of spark and then go into integrity how to perform.
+
+data lake,data bricks
+
+snowflake
+
+tableau or Power BI
+
+
+Snowflake Interview questions
+How can I see the Data lake data without loading into Snowflake?
+How to add/drop masking on column
+Add: alter table  emp modify column loc set masking policy email_mask;
+Drop: alter table  emp modify column loc UNSET MASKING POLICY ;
+Task will use VW(Virtual wharehouse) or not If yes what is the VW.
+How to keep dependencies jobs in tasks?
+How to execute task?( by EXECUTE TASK command )
+How to know how many credits are used for specific task?
+How do you consider the VW? Any specific reasons?
+How to know tasks which are completed in last 1 hour?
+What are the objects can be cloned?
+Pipes can be cloned when schema is cloned but those pipes are in paused state. Cloned pipes will still point to old DB and Schema if pipe is created with fully qualified mode( create pipe DB1.SH1.pipename)
+What will happen if any DDL changes happening while doing cloning…Will cause errors
+select query_text, completed_time
+from snowflake.account_usage.task_history
+where completed_time > dateadd(hours, -1, current_timestamp());
+
+select query_text, completed_time
+from snowflake.account_usage.task_history
+where completed_time > dateadd(hours, -1, current_timestamp());
+ 
+EXECUTE TASK | Snowflake Documentation
+ 
+-----------------------Snowflake interview questions-------------------------
+
+1. What is Data Cloning and data sharing? and their uses of these and What is Data replication?
+
+  How to share data and what is the use of this?
+
+  How do u know object is cloned object or not?
+
+  What is the use of time travel and How time travel is use in data cloning
+
+2. What is will happen to Pipes when cloned to DB/Schema?
+
+3. What are the plans we can take for Disaster recovery in Snowflake?
+
+4. What is the use of time travel in snowflake?
+
+5. What is Row level access and how to implement? ( ask question on dept no or location)
+
+6. What is the difference between views and MV and Secure views?
+
+7. What is the specific use of stored procedures?
+
+8. How to create Users and databases? ru using any stored procedures?
+
+9. What is the data lake and delta lake and Data warehouse?
+
+10. How do u know about Snowflake new features?
+
+11. As as Platform architect, If you face any issues how to reach Snowflake team
+
+	Is there any support team or website to raise the tickets
+
+12. I have tables views and stages and Pipes in my Schema. But I want to get DDLs for only base tables
+
+13. Can we create cloned table from one DB to an other( We can create)
+
+14. Cloned table will get all access as per original table or not?
+
+   No, Except Ownership permission
+
+15. View is created on top of table. To access view base table access is required to user or not?( Not required)
+
+16. To know snowflake version ----Select current_version()
+
+17. What are the editions of snowflake?
+
+18. Stream will occupy space or not?
+
+19. Can we call stored procedure in the Task?
+
+20. Difference between IFNULL, ISNULL,NVL and COALESCE
+
+21. What are the types Streams are available in the Snowflake?
+
+ 
+QUESTION 15: Drawbacks of materialized Views?
+A materialized view can query only a single table.
+We can’t use the sub queries
+Joins and including Self-joins not supported and Set operators also not possible
+MV can’t query another Materialized view
+It can not include window functions (OLAP), Having, order by, Group by ROLLUP and Group by CUBE
+Only Few Aggregate functions are allowed not all
+Finally maintenance cost is more because Snowflake performs background maintenance when base table changes.
+ 
+QUESTION 16: What is the difference between views and MV and Secure views?
+Question: What is the difference between Top n ,limit and fetch in snowflake? Will it give same result and repeat the same result again?
+ 
+Mixed questions:
+What is Scaling policy in Show warehouses command?
+How to know how many warehouses are there in snowflake?
+What is rejects?
+
+
+1. when the stream is STALE what will happen the data?
+2.what is the horizontal scale and vertical scale
+3.how to find out whose deleted the table and what time?
+4.time travel and versioning?
+5.how to schedule task if stream contain data then only run the task
+6.how to debug the snow pipe;
+7.how to unload the from snowflake to s3 bucket:
+8.how to encrypt the data for a file:
+9.what is the syntax of create json file format:
+10.snowflake architecture
+11.how to create integration object
+12.how to handle duplicate records:
+13.how to load the same file once proceed:
+force=true;
+14. explain the clusters
+15.what are editions in snowflake
+16.difference between enterprise and business critical
+17.resource monitors
+18.security policies
+19.how to trigger stream if stream contains data ?
+20.How to check snowpipe status ?
+21.how to check all the access history?
+22.what is the use of qualify clause in snowflake ?
+23.if files are loaded after that you have created the snowpipe and you added the one file all files will be load or not ?
+24.once deleted the file and again you loaded the same file in snowflake this file will load ?
+25.delete duplicate records in snowflake ?
+26 by using streams how to implement scd type 2 ?
+27. identifying which query is taking long time ?
+28.finding long queries running in warehouse ?
+29. how to kill the long running queries ?
+30.how to send notification if snow pipe getting fail?
+31.what are the limitations in materialized views ?
+32.how many types of streams ?
+33.can we share the data other than aws cloud provider if yes what are the steps ?
+34.what is the difference between account usage and information schema ?
+35.what is the difference between validation mode and validate ?
+36.what are access controls in sf ?
+37. how to scaleup and scale down in virtual warehouse.
+38.what is result scan in snowflake.
+39.difference between execute as caller and execute as owner in snowflake procedure.
+ 
