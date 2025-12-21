@@ -1,0 +1,127 @@
+# Databricks notebook source
+# MAGIC %md ###Hierarchy Analysis
+
+# COMMAND ----------
+
+#dbutils.widgets.removeAll()
+#dbutils.widgets.text("environment", "dev")
+#dbutils.widgets.text("country", "UK")
+#dbutils.widgets.text("database", "TPF")
+#dbutils.widgets.text("source", "IRI")
+#dbutils.widgets.text("dataMktKey", "MKT_TAG")
+#dbutils.widgets.text("dataPerKey", "PER_TAG")
+#dbutils.widgets.text("dataProdKey", "PROD_TAG")
+#dbutils.widgets.text("mktKey", "TAG")
+#dbutils.widgets.text("prodKey", "TAG")
+#dbutils.widgets.text("perKey", "TAG")
+#dbutils.widgets.text("valueTag", "M0001013")
+#dbutils.widgets.text("volumeTag", "M0099977")
+#dbutils.widgets.text("volumeCupsTag", "M0099977")
+#dbutils.widgets.text("perExpr", "concat(20, substring(PERIOD, -2,2)) as YEAR")
+#dbutils.widgets.text("exportDate", "09162021")
+#dbutils.widgets.text("filePrefix", "NES_")
+#dbutils.widgets.text("fileExtension", "csv")
+#dbutils.widgets.text("encoding", "UTF-8")
+#dbutils.widgets.text("countryName", "norway")
+#dbutils.widgets.text("productCategory", "Beverages")
+#dbutils.widgets.text("category_name", "Nestle_NSWCHOSESE_SE_arch")
+environment = dbutils.widgets.get("environment")
+country = dbutils.widgets.get("country")
+database = dbutils.widgets.get("database")
+source = dbutils.widgets.get("source")
+dataMktKey = dbutils.widgets.get("dataMktKey")
+dataPerKey = dbutils.widgets.get("dataPerKey")
+dataProdKey = dbutils.widgets.get("dataProdKey")
+mktKey = dbutils.widgets.get("mktKey")
+prodKey = dbutils.widgets.get("prodKey")
+perKey = dbutils.widgets.get("perKey")
+valueTag = dbutils.widgets.get("valueTag")
+volumeTag = dbutils.widgets.get("volumeTag")
+volumeCupsTag = dbutils.widgets.get("volumeCupsTag")
+perExpr = dbutils.widgets.get("perExpr")
+exportDate = dbutils.widgets.get("exportDate")
+filePrefix = dbutils.widgets.get("filePrefix")
+fileExtension = dbutils.widgets.get("fileExtension")
+countryName = dbutils.widgets.get("countryName")
+productCategory = dbutils.widgets.get("productCategory")
+category_name = dbutils.widgets.get("category_name")
+encoding = dbutils.widgets.get("encoding")
+
+# COMMAND ----------
+
+from pyspark.sql.functions import lit, sum, concat, substring, col, expr
+from configparser import ConfigParser
+
+# COMMAND ----------
+
+config = ConfigParser()
+
+#configPath = '/dbfs/mnt/etl_'+environment+'/config/adb-param-landing.ini'
+configPath = '/dbfs/mnt/cdfoutbound/config/adb-param-landing.ini'
+config.read(configPath)
+
+configSection = 'DEFAULT'
+d = dict(config[configSection])
+
+for k in d:
+  locals()[k] = d[k]
+
+# COMMAND ----------
+
+file_delimiter = '|'
+tagdict = {valueTag:'SALES_VALUE', volumeTag:'SALES_VOLUME_KG', volumeCupsTag:'SALES_VOLUME_CUPS'}
+
+prodFile = filePrefix+'_'+database+'_'+country+'_PROD'+exportDate+'.'+fileExtension
+mktFile = filePrefix+'_'+database+'_'+country+'_MKT'+exportDate+'.'+fileExtension
+perFile = filePrefix+'_'+database+'_'+country+'_PER'+exportDate+'.'+fileExtension
+fctFile = filePrefix+'_'+database+'_'+country+'_FCT'+exportDate+'.'+fileExtension 
+dataFile = filePrefix+'_'+database+'_'+country+'_fact_data'+exportDate+'.'+fileExtension
+
+#prodFile = database+'_PROD'+exportDate+'.'+fileExtension
+#mktFile  = database+'_MKT'+exportDate+'.'+fileExtension
+#perFile  = database+'_PER'+exportDate+'.'+fileExtension
+#fctFile  = database+'_FCT'+exportDate+'.'+fileExtension
+#dataFile = database+'_FACT_DATA'+exportDate+'.'+fileExtension
+
+
+# COMMAND ----------
+
+prod = spark.read.format('csv').options(header='true', inferSchema='false', quote=quote, escape=escape, delimiter=file_delimiter, encoding=file_encoding, ignoreLeadingWhiteSpace='true').load('/mnt/cdfoutbound/'+countryName+'/'+category_name+'/'+prodFile)
+per = spark.read.format('csv').options(header='true', inferSchema='false', quote=quote, escape=escape, delimiter=file_delimiter, encoding=file_encoding, ignoreLeadingWhiteSpace='true').load('/mnt/cdfoutbound/'+countryName+'/'+category_name+'/'+perFile)
+mkt = spark.read.format('csv').options(header='true', inferSchema='false', quote=quote, escape=escape, delimiter=file_delimiter, encoding=file_encoding, ignoreLeadingWhiteSpace='true').load('/mnt/cdfoutbound/'+countryName+'/'+category_name+'/'+mktFile)
+fct = spark.read.format('csv').options(header='true', inferSchema='false', quote=quote, escape=escape, delimiter=file_delimiter, encoding=file_encoding, ignoreLeadingWhiteSpace='true').load('/mnt/cdfoutbound/'+countryName+'/'+category_name+'/'+fctFile).fillna( { 'PRECISION':0, 'DENOMINATOR':1 } )
+data = spark.read.format('csv').options(header='true', inferSchema='false', quote=quote, escape=escape, delimiter=file_delimiter, encoding=file_encoding, ignoreLeadingWhiteSpace='true').load('/mnt/cdfoutbound/'+countryName+'/'+category_name+'/'+dataFile)
+
+# COMMAND ----------
+
+mkt = mkt.withColumnRenamed('HIER_NUM', 'MKT_HIER_NUM').withColumnRenamed('HIER_NAME', 'MKT_HIER_NAME').withColumnRenamed('LONG', 'CHANNEL').withColumnRenamed(mktKey, dataMktKey).select([dataMktKey, 'MKT_HIER_NUM', 'MKT_HIER_NAME', 'CHANNEL'])
+
+per = per.withColumn('PERIOD', col('TAG')).withColumnRenamed(perKey, dataPerKey).select([dataPerKey, 'PERIOD'])
+
+#per = per.withColumnRenamed('SHORT', 'PERIOD').withColumnRenamed(perKey, dataPerKey).select([dataPerKey, 'PERIOD'])
+
+
+prod = prod.withColumnRenamed('HIER_NUM', 'PROD_HIER_NUM').withColumnRenamed('HIER_NAME', 'PROD_HIER_NAME').withColumnRenamed('HIER_LEVEL_NUM', 'PROD_HIER_LEVEL_NUM').withColumnRenamed('HIER_LEVEL_NAME', 'PROD_HIER_LEVEL_NAME').withColumnRenamed(prodKey, dataProdKey).select([dataProdKey, 'PROD_HIER_NUM', 'PROD_HIER_NAME', 'PROD_HIER_LEVEL_NUM', 'PROD_HIER_LEVEL_NAME'])
+
+# COMMAND ----------
+
+for i in tagdict:
+  if i.strip() != '':
+    prec, deno = fct.where(col('TAG') == i).select(['PRECISION', 'DENOMINATOR']).collect()[0]
+    data = data.withColumn(i, col(i)*int(deno)/(10**int(prec))).withColumnRenamed(i, tagdict[i])
+  else:
+    data = data.withColumn(tagdict[i], lit('0'))
+
+# COMMAND ----------
+
+df = data.join(mkt, on = [dataMktKey], how = 'left').join(per, on = [dataPerKey], how = 'left').join(prod, on = [dataProdKey], how = 'left').withColumn('DATABASE', lit(database)).withColumn('COUNTRY', lit(country))
+
+df_out = df.groupBy(['DATABASE', 'COUNTRY', 'PERIOD', 'MKT_TAG', 'CHANNEL', 'MKT_HIER_NUM', 'MKT_HIER_NAME', 'PROD_HIER_NUM', 'PROD_HIER_NAME', 'PROD_HIER_LEVEL_NUM', 'PROD_HIER_LEVEL_NAME']).agg(sum('SALES_VALUE').alias('VALUE_LC'), sum('SALES_VOLUME_KG').alias('VOLUME_KG'), sum('SALES_VOLUME_CUPS').alias('VOLUME_CUPS'))
+
+df_out_yearly = df_out.selectExpr('DATABASE', 'COUNTRY', 'MKT_TAG', 'CHANNEL', 'MKT_HIER_NUM', 'MKT_HIER_NAME', 'PROD_HIER_NUM', 'PROD_HIER_NAME', 'PROD_HIER_LEVEL_NUM', 'PROD_HIER_LEVEL_NAME', 'VALUE_LC', 'VOLUME_KG', 'VOLUME_CUPS', perExpr).groupBy(['DATABASE', 'COUNTRY', 'YEAR', 'MKT_TAG', 'CHANNEL', 'MKT_HIER_NUM', 'MKT_HIER_NAME', 'PROD_HIER_NUM', 'PROD_HIER_NAME', 'PROD_HIER_LEVEL_NUM', 'PROD_HIER_LEVEL_NAME']).agg(sum('VALUE_LC').alias('VALUE_LC'), sum('VOLUME_KG').alias('VOLUME_KG'), sum('VOLUME_CUPS').alias('VOLUME_CUPS')).orderBy(['DATABASE', 'COUNTRY', 'YEAR', 'MKT_TAG', 'CHANNEL', 'MKT_HIER_NUM', 'MKT_HIER_NAME', 'PROD_HIER_NUM', 'PROD_HIER_LEVEL_NUM'])
+  
+#display(df_out_yearly)
+
+# COMMAND ----------
+
+df_out.write.format('com.crealytics.spark.excel').options(header='true', inferSchema = 'true').save('/mnt/cdfoutbound/hierarchy analysis/consolidated/Confectionary/P6'+'/consolidated_hierarchy_analysis_'+country+'_'+database+exportDate+'.xlsx', mode="overwrite")
