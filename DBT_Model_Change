@@ -1,0 +1,135 @@
+import re
+import os
+import pandas as pd
+import ast
+import snowflake.connector
+from snowflake.connector.errors import ProgrammingError
+
+#update below details as per need
+file_directory = r"C:\Users\NBKakeSu\OneDrive - NESTLE\REPO\SupplyChainandProcurement_WM\dbt\app-11325-at-WM\models\s6_presentation\ORDER_STATUS"
+current_folder="EUR"
+new_folder = "AOA"
+account = 'nn59438.west-europe.azure'
+user = 'subbareddy.kake@nestle.com' 
+warehouse = 'EDW_DEV_QVW'
+database = 'EDW_SBX'
+schema = 'INT'
+
+conn = snowflake.connector.connect(
+    user=user,
+    account=account,
+    warehouse=warehouse,
+    database=database,
+    schema=schema,
+    authenticator='externalbrowser'
+)
+current_folder_path=os.path.join(file_directory,current_folder)
+new_folder_path = os.path.join(file_directory, new_folder)
+
+start_text="source"
+end_text="}}"
+pattern = f"{re.escape(start_text)}(.*?){re.escape(end_text)}"
+
+def extract_string_from_file(file_path):
+    with open(file_path, 'r') as file:
+        content = file.read()
+        
+        matches = re.findall(pattern, content, re.DOTALL)
+        return matches
+
+results = []
+
+for filename in os.listdir(current_folder_path):
+    if filename.endswith(".sql"):  
+        file_path = os.path.join(current_folder_path, filename)
+        matches = extract_string_from_file(file_path)
+        
+        if matches:
+            for match in matches:
+                results.append({"File": filename, "Extracted Text": match.strip()})
+        else:
+            results.append({"File": filename, "Extracted Text": "No match found"})
+
+
+df = pd.DataFrame(results)
+
+df_deduplicated = df.drop_duplicates(subset=["File", "Extracted Text"])
+
+#output_file = "extracted_results.xlsx"
+#df_deduplicated.to_excel(output_file, index=False, engine='openpyxl')
+
+#print(df_deduplicated)
+
+print("\nBelow is the list source tables from models\n")
+
+def extract_second_value(text):
+    try:
+        tuple_value = ast.literal_eval(text)
+        return tuple_value[1]
+    except Exception as e:
+        return None
+
+extracted_values = df['Extracted Text'].apply(extract_second_value).tolist()
+filtered_table_names = [table for table in extracted_values if table not in ['None', None]]
+modified_table_names = [table.replace(current_folder, new_folder) for table in filtered_table_names]
+print(modified_table_names)
+
+table_names = modified_table_names
+missing_tables = []
+
+cursor = conn.cursor()
+
+for table_name in table_names:
+    query = f"""
+    SELECT COUNT(*) 
+    FROM INFORMATION_SCHEMA.TABLES
+    WHERE TABLE_SCHEMA = '{schema}' 
+    AND TABLE_NAME = '{table_name}'
+    """
+
+    try:
+        
+        cursor.execute(query)
+
+        result = cursor.fetchone()
+
+        if result[0] == 0:
+            missing_tables.append(table_name) 
+        # else:
+        #     print(f"Table '{table_name}' exists in schema '{schema}'.")
+
+    except snowflake.connector.errors.ProgrammingError as e:
+        print(f"Error occurred while checking table '{table_name}': {e}")
+        missing_tables.append(table_name) 
+
+if len(missing_tables) == 0:
+    print(f"\n\nAll tables exist in '{database}'.'{schema}':\n proceeding to create new files in '{new_folder_path}'\n")
+
+    if not os.path.exists(new_folder_path):
+        os.makedirs(new_folder_path)
+
+    for filename in os.listdir(current_folder_path):
+        if filename.endswith(".sql"): 
+            file_path = os.path.join(current_folder_path, filename)
+
+        with open(file_path, 'r') as file:
+            content = file.read()
+
+        updated_content = content.replace(current_folder, new_folder)
+
+        new_filename = filename.replace(current_folder, new_folder)
+
+        new_file_path = os.path.join(new_folder_path, new_filename)
+
+        with open(new_file_path, 'w') as file:
+            file.write(updated_content)
+
+        print(f"Updated file saved as: {new_file_path}")
+
+else:
+    print(f"\n\nThe following tables do not exist in '{database}'.'{schema}':")
+    for table in missing_tables:
+        print(f"- {table}")
+
+cursor.close()
+conn.close()
