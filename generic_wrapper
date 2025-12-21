@@ -1,1 +1,39 @@
+# Databricks notebook source
+# MAGIC %md ###Reference Product
+
+# COMMAND ----------
+
+#encoding = 'UTF-8'
+encoding = 'WINDOWS-1252'
+l = dbutils.fs.ls("dbfs:/mnt/cdfoutbound/EXPORT/Confectionery")
+
+country_list = ['CH','NL','NO','DK']
+for i in l:
+  country_list.append(str(i.path).replace('dbfs:/mnt/cdfoutbound/EXPORT/Confectionery/', '').replace('.xlsx', ''))
+
+print(country_list)
+
+# COMMAND ----------
+
+# l=country_list
+l = ['CH','NL','NO','DK']
+
+for item in l:
+  print("executing notebook for the element: "+str(item))
+  dbutils.notebook.run("Reference_Product", 3600, {"country_code" : item, "encoding" : encoding, "filename" : item})
+
+# COMMAND ----------
+
+# MAGIC %md ###Reference Product Split
+
+# COMMAND ----------
+
+#l = ['PL','ES']
+
+#for item in l:
+  #print("executing notebook for the element: "+str(item))
+  #dbutils.notebook.run("Reference_Product_Split", 3600, {"country_code" : item, "encoding" : 'UTF-8'})
+
+# COMMAND ----------
+
 
