@@ -1,0 +1,383 @@
+# Databricks notebook source
+# DBTITLE 1,Add Config Parameters
+# dbutils.widgets.removeAll()
+# dbutils.widgets.text("environment", "dev")
+# dbutils.widgets.text("country", "spain")
+# dbutils.widgets.text("country_code", "ES")
+# dbutils.widgets.text("file_type", "PROD")
+# dbutils.widgets.text("category_name", "Nestle_COUNTLINES_ES_arch")
+# dbutils.widgets.text("database_name", "COUNTLINES")
+# dbutils.widgets.text("encoding", "UTF-8")
+#dbutils.widgets.text("deltaID", "2023P007")
+#dbutils.widgets.text("productCategory", "BEVERAGES")
+
+deltaID = dbutils.widgets.get("deltaID")
+environment = dbutils.widgets.get("environment")
+country = dbutils.widgets.get("country")
+productCategory = dbutils.widgets.get("productCategory")
+country_code = dbutils.widgets.get("country_code")
+file_type = dbutils.widgets.get("file_type")
+category_name = dbutils.widgets.get("category_name")
+database_name = dbutils.widgets.get("database_name")
+encoding = dbutils.widgets.get("encoding")
+
+# COMMAND ----------
+
+# DBTITLE 1,Import Libraries
+from pyspark.sql.types import StructType, StructField, StringType
+from pyspark.sql.functions import col, coalesce,concat,lit
+import json
+from datetime import datetime
+import calendar
+
+# COMMAND ----------
+
+def compareHier(l1,l2):
+  if(l1==l2):
+    return [False, "No hierarchy changes detected"]
+  else:
+    added_hier = set(curr_hier_list) - set(prev_hier_list)
+    removed_hier = set(prev_hier_list) - set(curr_hier_list)
+    change_str = ""
+        
+    if added_hier:
+      change_str += f"Added hierarchies: {';'.join(added_hier)} "
+    if removed_hier:
+      change_str += f"Removed hierarchies: {';'.join(removed_hier)} "
+        
+    return [True, change_str]
+
+# COMMAND ----------
+
+def compareSchema(l1,l2):
+  if (l1 == l2):
+    return [False, "No schema changes detected"]
+  else:
+    added_cols = curr_cols - prev_cols
+    removed_cols = prev_cols - curr_cols
+    changed_cols = prev_cols.intersection(curr_cols)
+    change_str = ""
+        
+    if added_cols:
+      change_str += f"Added columns: {';'.join(added_cols)} "
+    if removed_cols:
+      change_str += f"Removed columns: {';'.join(removed_cols)} "
+    if changed_cols:
+      for col in changed_cols:
+        prev_dtype = df_prev.schema[col].dataType
+        curr_dtype = df_curr.schema[col].dataType
+        if prev_dtype != curr_dtype:
+          change_str += f"Changed datatype for column {col}: {prev_dtype} -> {curr_dtype} "
+    return [True, change_str]
+
+# COMMAND ----------
+
+def check_scaling(old_file, new_file):
+    # Read the old and new files as dataframes
+    df_old = old_file
+    df_new = new_file
+
+    # Initialize empty lists for storing the scaling changes
+    precision_changes = []
+    denominator_changes = []
+    i=0
+    # Iterate over the rows of the dataframes and compare the values in the PRECISION and DENOMINATOR columns
+    for row_old, row_new in zip(df_old.collect(), df_new.collect()):
+        i+=1
+        if row_old.PRECISION != row_new.PRECISION:
+            precision_changes.append("Row " + str(i) + ": " + str(row_old.PRECISION) + " -> " + str(row_new.PRECISION))
+        if row_old.DENOMINATOR != row_new.DENOMINATOR:
+            denominator_changes.append("Row " + str(i) + ": " + str(row_old.DENOMINATOR) + " -> " + str(row_new.DENOMINATOR))
+
+    # Build the result string based on the changes detected
+    if precision_changes and denominator_changes:
+        result = "BOTH CHANGED PRECISION CHANGES: " + ";".join(precision_changes) + "\tDENOMINATOR CHANGES:\t" + ";".join(denominator_changes)
+    elif precision_changes:
+        result = "PRECISION CHANGED" + ";".join(precision_changes)
+    elif denominator_changes:
+        result = "DENOMINATOR CHANGED" + ";".join(denominator_changes)
+    else:
+        result = "UNCHANGED"
+    return result
+
+# COMMAND ----------
+
+def check_referential_integrity(filepath_curr, per_file, prod_file, mkt_file, file_curr):
+  
+  # Read the files as dataframes
+  df_period_tags = spark.read.format('com.databricks.spark.csv').options(header=True, columns=['TAG'], delimiter = '|').load(filepath_curr+'/'+per_file)
+  df_product_tags = spark.read.format('com.databricks.spark.csv').options(header=True, columns=['TAG'],delimiter = '|').load(filepath_curr+'/'+prod_file)
+  df_market_tags = spark.read.format('com.databricks.spark.csv').options(header=True, columns=['TAG'],delimiter = '|').load(filepath_curr+'/'+mkt_file)
+  df_factdata_tags = spark.read.format('com.databricks.spark.csv').options(header=True, columns=['MKT_TAG', 'PROD_TAG', 'PER_TAG'],delimiter = '|').load(filepath_curr+'/'+file_curr)
+
+  df_fd_per_tags = df_factdata_tags.select("PER_TAG").distinct()
+  df_fd_prod_tags = df_factdata_tags.select("PROD_TAG").distinct()
+  df_fd_mkt_tags = df_factdata_tags.select("MKT_TAG").distinct()
+
+  # Check for PER_TAG entries in the PERIOD file
+  per_tags_not_in_period = df_fd_per_tags.join(df_period_tags, df_factdata_tags.PER_TAG == df_period_tags.TAG, "left_anti")
+
+  # Check for PROD_TAG entries in the PRODUCT file
+  prod_tags_not_in_product = df_fd_prod_tags.join(df_product_tags, df_factdata_tags.PROD_TAG == df_product_tags.TAG, "left_anti")
+
+  # Check for MKT_TAG entries in the MARKET file
+  mkt_tags_not_in_market = df_fd_mkt_tags.join(df_market_tags, df_factdata_tags.MKT_TAG == df_market_tags.TAG, "left_anti")
+
+  # Combine the results and return as a string
+  results = ''
+  if per_tags_not_in_period.rdd.isEmpty() and prod_tags_not_in_product.rdd.isEmpty() and mkt_tags_not_in_market.rdd.isEmpty():
+      return 'FALSE:NO CHANGE'
+  else:
+      results = f'PERIOD_TAGS_NOT_DEFINED: {per_tags_not_in_period.count()} PRODUCT_TAGS_NOT_DEFINED: {prod_tags_not_in_product.count()} MARKET_TAGS_NOT_DEFINED: {mkt_tags_not_in_market.count()}'
+  return results
+
+# COMMAND ----------
+
+def get_parsed_date(country, category_name, tag, short, long):
+    cal = {'DJ':1,'FM':3,'AM':5,'JJ':7,'AS':9,'ON':11}
+    for date_formats in formats[country][category_name]:
+        date_time_str = eval(date_formats['PERIOD_COLUMN'].lower())
+        if date_formats['TYPE'] == 'BIMONTH':
+          year = int(short[3:])
+          month = cal.get(short[:2])
+          test_date = datetime(year,month, 1)
+          res = calendar.monthrange(test_date.year, test_date.month)[1]
+          date_time_str = f'Bi-month {year}-{month}-{res}'
+
+        if date_formats['FORMAT'].find("%u") != -1:
+            date_time_str += ' 1'
+
+        try:
+            date_time_obj = datetime.strptime(date_time_str, date_formats['FORMAT'])
+            return "NO CHANGE"
+        except:
+            continue  
+
+    return "PERIODICITY CHANGED"
+
+def get_parsed_date_FF(country, category_name, tag):
+  
+  for date_formats in formats[country][category_name]:
+    date_time_str = eval(date_formats['PERIOD_COLUMN'].lower())
+
+    if date_formats['FORMAT'].find("%u")!=-1:
+      date_time_str += ' 1'
+
+    try :
+      date_time_obj = datetime.strptime(date_time_str, date_formats['FORMAT'])
+      return "NO CHANGE"
+    except:
+      return "PERIODICITY CHANGED"
+
+# COMMAND ----------
+
+# DBTITLE 1,Read Files & Compare
+filepath_curr = '/mnt/'+environment+'/'+country+'/'+category_name+'/'
+filepath_prev = '/mnt/'+environment+'/BCKUP_cdfoutbound/'+country+'/'+category_name+'/'
+
+fileList_prev = dbutils.fs.ls(filepath_prev)
+file_prev = [x.path for x in fileList_prev if database_name.upper() in x.name.upper() and file_type.upper() in x.name.upper()][0]
+
+fileList_curr = dbutils.fs.ls(filepath_curr)
+file_curr = [x.path for x in fileList_curr if database_name.upper() in x.name.upper() and file_type.upper() in x.name.upper()][0]
+print(file_curr)
+print(file_prev)
+if file_type != "DATA":
+  factdata_file = [file.name for file in fileList_curr if 'FACT_DATA' in file.name.upper()][0]
+  per_file = [file.name for file in fileList_curr if 'PER' in file.name][0]
+  prod_file = [file.name for file in fileList_curr if 'PROD' in file.name][0]
+  mkt_file = [file.name for file in fileList_curr if 'MKT' in file.name][0]
+  df_prev = spark.read.format('csv').options(header='true', inferSchema='false', quote='"', escape='\\', delimiter='|', encoding=encoding, ignoreLeadingWhiteSpace='true', multiline='true').load(file_prev)
+
+  df_curr = spark.read.format('csv').options(header='true', inferSchema='false', quote='"', escape='\\', delimiter='|', encoding=encoding, ignoreLeadingWhiteSpace='true', multiline='true').load(file_curr)
+  prev_cols = set(df_prev.columns)
+  curr_cols = set(df_curr.columns)
+else:
+  data_file = [file.name for file in fileList_curr if 'DATA' in file.name][0]
+
+  df_prev = spark.read.format('csv').options(header='true', inferSchema='false', quote='"', escape='\\', delimiter=',', encoding=encoding, ignoreLeadingWhiteSpace='true', multiline='true').load(file_prev)
+
+  df_curr = spark.read.format('csv').options(header='true', inferSchema='false', quote='"', escape='\\', delimiter=',', encoding=encoding, ignoreLeadingWhiteSpace='true', multiline='true').load(file_curr)
+  prev_cols = set(df_prev.columns)
+  curr_cols = set(df_curr.columns)
+
+# COMMAND ----------
+
+output_schema = StructType([
+  StructField("DELTA_ID", StringType()),
+  StructField("CATEGORY_NAME", StringType()),
+  StructField("COUNTRY", StringType()),
+  StructField("COUNTRY_CODE", StringType()),
+  StructField("PRODUCT_CATEGORY", StringType()),
+  StructField("DATABASE_NAME", StringType()),
+  StructField("FILE_TYPE", StringType()),
+  StructField("CURRENT_FILE", StringType()),
+  StructField("PREVIOUS_FILE", StringType()),
+  StructField("SCHEMA_CHANGE", StringType()),
+  StructField("SCHEMA_CHANGE_DESC", StringType()),
+  StructField("HIERARCHY_CHANGE", StringType()),
+  StructField("HIERARCHY_CHANGE_DESC", StringType()),
+  StructField("SCALING_CHANGE_DESC", StringType()),
+  StructField("TAGS_CHECK_DESC", StringType()),
+  StructField("PERIODICITY_CHECK", StringType())
+])
+
+output_data = []
+schema_change = compareSchema(df_prev.columns, df_curr.columns)
+
+if file_type in ['PROD', 'MKT']:
+  prev_hier = df_prev.select(concat(lit("H"), coalesce(col("HIER_NUM"), lit("")), lit("L"), coalesce(col("HIER_LEVEL_NUM"), lit(""))).alias("HIER")).distinct()
+  curr_hier = df_curr.select(concat(lit("H"), coalesce(col("HIER_NUM"), lit("")), lit("L"), coalesce(col("HIER_LEVEL_NUM"), lit(""))).alias("HIER")).distinct()
+    
+  prev_hier_list = [row.HIER for row in prev_hier.collect()]
+  curr_hier_list = [row.HIER for row in curr_hier.collect()]
+   
+  hier_change = compareHier(prev_hier_list, curr_hier_list)
+  output_data.append({
+    'DELTA_ID': deltaID,
+    'CATEGORY_NAME': category_name,
+    'COUNTRY': country,
+    'COUNTRY_CODE': country_code,
+    'PRODUCT_CATEGORY': productCategory,
+    'DATABASE_NAME': database_name,
+    'FILE_TYPE': file_type,
+    'CURRENT_FILE': file_curr.split('/')[-1],
+    'PREVIOUS_FILE': file_prev.split('/')[-1],
+    'SCHEMA_CHANGE': schema_change[0],
+    'SCHEMA_CHANGE_DESC': schema_change[1],
+    'HIERARCHY_CHANGE': hier_change[0],
+    'HIERARCHY_CHANGE_DESC': hier_change[1],
+    'SCALING_CHANGE_DESC': 'NOT APPLICABLE',
+    'TAGS_CHECK_DESC':'NOT APPLICABLE',
+    'PERIODICITY_CHECK':'NOT APPLICABLE'
+  })
+
+elif file_type == 'PER':
+  with open('/dbfs/mnt/'+environment+'/Period Harmonization/'+productCategory+'/PERIOD_DICT_'+productCategory+'.json') as dict_file:
+    formats = json.load(dict_file)
+  tag = spark.read.format('com.databricks.spark.csv').options(header=True, inferSchema=False, delimiter = '|').load(filepath_curr+'/'+per_file).select('TAG').first()[0]
+  short = spark.read.format('com.databricks.spark.csv').options(header=True, inferSchema=False, delimiter = '|').load(filepath_curr+'/'+per_file).select('SHORT').first()[0]
+  long = spark.read.format('com.databricks.spark.csv').options(header=True, inferSchema=False, delimiter = '|').load(filepath_curr+'/'+per_file).select('LONG').first()[0]
+  
+  prev_hier = df_prev.select(concat(lit("H"), coalesce(col("HIER_NUM"), lit("")), lit("L"), coalesce(col("HIER_LEVEL_NUM"), lit(""))).alias("HIER")).distinct()
+  curr_hier = df_curr.select(concat(lit("H"), coalesce(col("HIER_NUM"), lit("")), lit("L"), coalesce(col("HIER_LEVEL_NUM"), lit(""))).alias("HIER")).distinct()
+  prev_hier_list = [row.HIER for row in prev_hier.collect()]
+  curr_hier_list = [row.HIER for row in curr_hier.collect()]
+  
+  per_check=get_parsed_date(country, category_name, tag, short, long)
+  hier_change = compareHier(prev_hier_list, curr_hier_list)
+  output_data.append({
+    'DELTA_ID': deltaID,
+    'CATEGORY_NAME': category_name,
+    'COUNTRY': country,
+    'COUNTRY_CODE': country_code,
+    'PRODUCT_CATEGORY':productCategory,
+    'DATABASE_NAME': database_name,
+    'FILE_TYPE': file_type,
+    'CURRENT_FILE': file_curr.split('/')[-1],
+    'PREVIOUS_FILE': file_prev.split('/')[-1],
+    'SCHEMA_CHANGE': schema_change[0],
+    'SCHEMA_CHANGE_DESC': schema_change[1],
+    'HIERARCHY_CHANGE': hier_change[0],
+    'HIERARCHY_CHANGE_DESC': hier_change[1],
+    'SCALING_CHANGE_DESC': 'NOT APPLICABLE',
+    'TAGS_CHECK_DESC':'NOT APPLICABLE',
+    'PERIODICITY_CHECK':per_check
+  })
+
+elif file_type =='FCT':
+  
+  scaling_change = check_scaling(df_prev, df_curr)
+  output_data.append({
+    'DELTA_ID': deltaID,
+    'CATEGORY_NAME': category_name,
+    'COUNTRY': country,
+    'COUNTRY_CODE': country_code,
+    'PRODUCT_CATEGORY': productCategory,
+    'DATABASE_NAME': database_name,
+    'FILE_TYPE': file_type,
+    'CURRENT_FILE': file_curr.split('/')[-1],
+    'PREVIOUS_FILE': file_prev.split('/')[-1],
+    'SCHEMA_CHANGE': schema_change[0],
+    'SCHEMA_CHANGE_DESC': schema_change[1],
+    'HIERARCHY_CHANGE': 'NOT APPLICABLE',
+    'HIERARCHY_CHANGE_DESC': 'NOT APPLICABLE',
+    'SCALING_CHANGE_DESC': scaling_change,
+    'TAGS_CHECK_DESC':'NOT APPLICABLE',
+    'PERIODICITY_CHECK':'NOT APPLICABLE'
+  })
+
+elif file_type =='fact_data':
+  
+  ref_int_check = check_referential_integrity(filepath_curr, per_file, prod_file, mkt_file, factdata_file)
+  output_data.append({
+    'DELTA_ID':deltaID,
+    'CATEGORY_NAME': category_name,
+    'COUNTRY': country,
+    'COUNTRY_CODE': country_code,
+    'PRODUCT_CATEGORY':productCategory,
+    'DATABASE_NAME': database_name,
+    'FILE_TYPE': file_type,
+    'CURRENT_FILE': file_curr.split('/')[-1],
+    'PREVIOUS_FILE': file_prev.split('/')[-1],
+    'SCHEMA_CHANGE': schema_change[0],
+    'SCHEMA_CHANGE_DESC': schema_change[1],
+    'HIERARCHY_CHANGE': 'NOT APPLICABLE',
+    'HIERARCHY_CHANGE_DESC': 'NOT APPLICABLE',
+    'SCALING_CHANGE_DESC': 'NOT APPLICABLE',
+    'TAGS_CHECK_DESC':ref_int_check,
+    'PERIODICITY_CHECK':'NOT APPLICABLE'
+  })
+elif file_type =='DATA':
+  with open('/dbfs/mnt/'+environment+'/Period Harmonization/'+productCategory+'/PERIOD_DICT_'+productCategory+'.json') as dict_file:
+    formats = json.load(dict_file)   
+  data_file = [file.name for file in fileList_curr if 'DATA' in file.name][0]
+  tag = spark.read.format('com.databricks.spark.csv').options(header=True, inferSchema=False, delimiter = ',').load(filepath_curr+'/'+data_file).select('Time').first()[0].replace(" ","").upper()
+  
+  per_check_FF=get_parsed_date_FF(country, category_name, tag)
+  output_data.append({
+    'DELTA_ID':deltaID,
+    'CATEGORY_NAME': category_name,
+    'COUNTRY': country,
+    'COUNTRY_CODE': country_code,
+    'PRODUCT_CATEGORY': productCategory,
+    'DATABASE_NAME': database_name,
+    'FILE_TYPE': file_type,
+    'CURRENT_FILE': file_curr.split('/')[-1],
+    'PREVIOUS_FILE': file_prev.split('/')[-1],
+    'SCHEMA_CHANGE': schema_change[0],
+    'SCHEMA_CHANGE_DESC': schema_change[1],
+    'HIERARCHY_CHANGE': 'NOT APPLICABLE',
+    'HIERARCHY_CHANGE_DESC': 'NOT APPLICABLE',
+    'SCALING_CHANGE_DESC': 'NOT APPLICABLE',
+    'TAGS_CHECK_DESC':'NOT APPLICABLE',
+    'PERIODICITY_CHECK': per_check_FF
+  })
+
+else:
+  output_data.append({
+    'DELTA_ID':deltaID,
+    'CATEGORY_NAME': category_name,
+    'COUNTRY': country,
+    'COUNTRY_CODE': country_code,
+    'PRODUCT_CATEGORY': productCategory,
+    'DATABASE_NAME': database_name,
+    'FILE_TYPE': file_type,
+    'CURRENT_FILE': file_curr.split('/')[-1],
+    'PREVIOUS_FILE': file_prev.split('/')[-1],
+    'SCHEMA_CHANGE': schema_change[0],
+    'SCHEMA_CHANGE_DESC': schema_change[1],
+    'HIERARCHY_CHANGE': 'NOT APPLICABLE',
+    'HIERARCHY_CHANGE_DESC': 'NOT APPLICABLE',
+    'SCALING_CHANGE_DESC': 'NOT APPLICABLE',
+    'TAGS_CHECK_DESC':'NOT APPLICABLE',
+    'PERIODICITY_CHECK':'NOT APPLICABLE'
+  })
+  
+df_out = spark.createDataFrame(data=output_data, schema = output_schema)
+
+display(df_out)
+
+# COMMAND ----------
+
+ df_out.write.format("com.databricks.spark.csv").options(header='true', delimiter = ',', inferSchema='true', quote='"', ignoreLeadingWhiteSpace='true', emptyValue='', encoding = 'UTF-8').save('/mnt/cdfoutbound/schema_change/'+productCategory+'/Schema_Change_Output', mode="append")
