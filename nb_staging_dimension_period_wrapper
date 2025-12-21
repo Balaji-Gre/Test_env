@@ -1,0 +1,24 @@
+# Databricks notebook source
+#dbutils.widgets.removeAll()
+#dbutils.widgets.text("environment", "dev")
+#dbutils.widgets.text("productCategory", "CONFECTIONARY")
+environment = dbutils.widgets.get("environment")
+productCategory = dbutils.widgets.get("productCategory")
+
+# COMMAND ----------
+
+from pyspark.sql.functions import col
+
+# COMMAND ----------
+
+periodLoadConfig = '/mnt/cdfoutbound/Period Harmonization/CONFECTIONARY/Period_Config.xlsx'
+df_period_conf = spark.read.format("com.crealytics.spark.excel").options(header='true', inferSchema = 'true').load(periodLoadConfig).filter(col("PRODUCT_CATEGORY")==productCategory)
+
+for row in df_period_conf.rdd.toLocalIterator():
+  print("period loading for market: "+str(row['COUNTRY'])+" and database "+str(row['CATEGORY_NAME']))
+  
+  dbutils.notebook.run("nb_staging_dimension_period", 3600, {"productCategory" : productCategory, "category" : row['CATEGORY_NAME'], "country_code" : row['COUNTRY_CODE'], "country" : row['COUNTRY'], "environment" : environment})
+
+# COMMAND ----------
+
+dbutils.notebook.run("consolidate_periods", 3600, {"environment" : environment, "folder" : "cdfoutbound/Period Harmonization/CONFECTIONARY/output","reportType" : productCategory+"_"})
