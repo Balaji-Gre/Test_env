@@ -1,0 +1,93 @@
+CREATE OR REPLACE PROCEDURE EDW_SBX.STG.CDF_SYN_REF_STG_INT_SCD2_CONFEC_SP("SRC_TABLE" VARCHAR(16777216), "TGT_TABLE" VARCHAR(16777216))
+RETURNS VARCHAR(16777216)
+LANGUAGE JAVASCRIPT
+EXECUTE AS CALLER
+AS '
+    var SP_DETAILS="";
+    var SP_NAME="";
+    var APP_ID="";
+    try
+    {
+       //Since using this as child sp, therefore commented, will be used in case it works as parent sp
+       //begin transaction
+       snowflake.execute( {sqlText: "BEGIN TRANSACTION;"} );
+
+        
+     var src_tbl_stmt = snowflake.createStatement
+        (
+        {
+           sqlText: "SELECT * FROM STG.CDF_SOURCE_CONTROL_TABLE WHERE  TARGET_SCHEMA=''INT'' AND ACTIVE_FLAG=''Y'' AND SOURCE_TABLE= ''"+SRC_TABLE+"'' AND TARGET_TABLE=''" +TGT_TABLE+ "'';"
+        }
+        );
+          
+          
+     var rs = src_tbl_stmt.execute();
+        rs.next();
+          
+        SOURCE_SCHEMA=rs.getColumnValue(3);
+        TARGET_SCHEMA=rs.getColumnValue(4);
+        SOURCE_TABLE=rs.getColumnValue(5);
+        TARGET_TABLE=rs.getColumnValue(6);
+        SOURCE_COLUMN=rs.getColumnValue(8);
+        TARGET_COLUMN=rs.getColumnValue(9);
+        SP_NAME=rs.getColumnValue(16);
+        APP_ID=rs.getColumnValue(17);
+          
+        SP_DETAILS=""+SP_NAME+"("+SRC_TABLE+","+TGT_TABLE+")";
+
+ var stg_cnt_stmt = snowflake.createStatement(
+        {
+           sqlText: "SELECT COUNT(*) FROM INT."+TGT_TABLE+";"
+        }
+        );          
+    
+        // execute staging table count query
+        var rowcount_staging = stg_cnt_stmt.execute();
+        rowcount_staging.next()
+        var COUNT_BEFORE = rowcount_staging.getColumnValue(1);
+
+
+          
+
+var ins_stmt=snowflake.createStatement(
+{
+sqlText:"MERGE INTO "+TARGET_SCHEMA+"."+TARGET_TABLE+" target USING(SELECT src.KEYCOLS_HASH as keycol, src.* FROM "+SOURCE_SCHEMA+"."+SOURCE_TABLE+" src UNION ALL SELECT NULL as keycol, src.* FROM "+SOURCE_SCHEMA+"."+SOURCE_TABLE+" src JOIN "+TARGET_SCHEMA+"."+TARGET_TABLE+" target on target.KEYCOLS_HASH=src.KEYCOLS_HASH WHERE(src.ALLCOLS_HASH<>target.ALLCOLS_HASH) AND target.FLAG=''Y'') src on src.keycol=target.KEYCOLS_HASH WHEN MATCHED AND(src.ALLCOLS_HASH<>target.ALLCOLS_HASH AND target.FLAG=''Y'') THEN UPDATE SET target.FLAG=''N'',target.UPDATE_TIMESTAMP=CURRENT_TIMESTAMP WHEN NOT MATCHED THEN INSERT("+TARGET_COLUMN+") VALUES ("+SOURCE_COLUMN+");" 
+}
+);   
+
+     ins_stmt.execute();
+     var INSERTED_ROWS=ins_stmt.getNumRowsInserted();
+     var UPDATED_ROWS=ins_stmt.getNumRowsUpdated();
+
+     snowflake.execute( {sqlText: "CALL OPS.INT.WRITE_LOAD_LOG(''"+APP_ID+"'', ''"+SP_NAME+"'', ''Completed'',''Rows Before : "+COUNT_BEFORE+"; Inserted : "+INSERTED_ROWS+"; Updated : "+UPDATED_ROWS+"; in "+TGT_TABLE +";Load from STG to INT Completed with SP "+SP_DETAILS+"'')"} );
+                          
+
+      //Commit transaction if all completed
+      snowflake.execute( {sqlText: "COMMIT;"} );
+      return "Succeeded.";   // Return a success/error indicator.
+}
+
+catch (err)  {
+        //roll back transaction if there is any error.
+        snowflake.execute( {sqlText: "ROLLBACK;"} );
+          
+
+        // set final error message to be loaded in log table 
+        var ERROR_MESSAGE = err.message.replace(/['']/g,"''").substring(0,350);
+        var FINAL_ERROR="Error Code : "+err.code+"; Error Message : "+ERROR_MESSAGE+"; in Child SP "+SP_DETAILS;
+          
+        //call WRITE_LOAD_LOG stored procedure to update status
+        sp_write_to_log_failed_stmt = snowflake.createStatement(
+       {
+           sqlText: "CALL OPS.INT.WRITE_LOAD_LOG(?,?,?,?);",
+           binds:[APP_ID,SP_NAME,''Failed'', FINAL_ERROR]
+         }
+         );
+         res1 = sp_write_to_log_failed_stmt.execute();
+
+
+        // Return a error indicator.    
+          return FINAL_ERROR;
+}  
+
+';
