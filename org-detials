@@ -1,0 +1,221 @@
+@Vijaya Kumar Kallapu,
+jack heh
+
+Incidents- resolution steps are missing
+profiles-one page
+access-related
+new resoruces 
+
+github
+Balaji-Gre
+Winter@25@1
+
+
+
+Assignment Groups 
+PT - EDM Omni Customer 
+        It is used only for tracking user created incidents (as of now)
+     This group was created in Aug 2025
+PT - Customer Data Engineering 
+        It is used for both Sustain & Solution Delivery
+Note: Gradually tickets for Sustain will be moved to "PT - EDM Omni Customer"
+
+Medallia,Amperity,Merkle,Axiom/Trillium
+trillium is running in production(will be gone by end of february)
+
+miro.com(register with hcl email)--to generate flow diagrams
+
+https://client.wvd.microsoft.com/arm/webclient/index.html
+https://gapinc.service-now.com
+
+https://gapinc.atlassian.net/wiki/spaces/PDCA/pages/1310589868/GDP+Data+Access+Requests
+
+balaji.rangu@gap.com
+Retail Mechansing System
+@9V#_6Zu@LI%~7V
+Winter@25@Oct10
+What is cloud
+--hosted services in the secured network
+Why is cloud
+High availability
+Scalability(Elasticity)
+Agility
+Fault tolerance
+
+DNA pass 
+Runner@25@07
+
+Unity catalog
+
+Managed table when we drop table it drops both metadata and data
+
+unmanaged table when we apply drop table it drops only metadata but actual data will not drop.
+
+https://partner-academy.databricks.com/pages/35/partner-academy-home-page
+
+https://hclo365.sharepoint.com/:f:/r/sites/DBS-Newton-Data-Platform/Shared%20Documents/General/Understanding-docs?csf=1&web=1&e=B0Rkju
+Medallion architecture
+
+shared data assets(includes analytical master data)18:52
+
+hourly/some of them runs multiple times in a day/daily/weekly/monthly
+
+some of the data gets loaded every couple of minutes(27:37)
+
+data platform itself is primarily databricks
+
+tha lake itself is a data bricks delta lake
+
+lake is on ADLS gen2
+
+120 plus data streams that we ingest
+
+curation scripts are in teradata BTEQ scripts
+
+ingestion curation all these jobs are sceduled in Kawa scheduler.
+
+PII(Personally Identifiable Information)
+
+adobe analytics to CJA(custerom journey analytics)
+
+talview
+
+
+
+FR is harmonized. GR, HU, CZ and SK
+36260
+
+AT,ES,PT
+30808
+JD416020573IN
+
+Italy 
+substring(PERIOD,20,4) as YEAR
+df_out_yearly at last
+
+1316
+
+substring(PERIOD,5,4) as YEAR
+
+Germany
+RIGHT(PERIOD,4) as YEAR
+
+
+=COUNTIF(I176:I6464,I176)
+
+KZ,PT,serbia,SK,CH
+
+DE_R_NE3951_LD
+DE_R_NE3954_LD
+DE_R_NE3955_LD
+DE_R_NE3956_LD
+DE_R_NE5039_LD
+DE_R_NE8224_LD
+
+
+
+
+DE 3rd to 7th(14th P1)
+DB config entry  should not delete until LD completes and before PBI datarefresh
+
+LEETCODE
+
+S01063O8C2002251200001
+
+PT--Nestle_NTFANTO9_PT_arch
+
+call EDW_SBX.INT.POPULATE_AGGREGATED_VALUE_SALES_ACV();---COUNTRY SPEICIFIC PARAMETER
+Use the link given to login into Percipio : https://hclcontent.percipio.com/  
+Credentials-  User name: User HCL SAP ID | Password: Welcome1!
+
+
+DDM wiki
+
+https://dev.azure.com/nestle-it/AnalyticsTechnologyWIKI/_wiki/wikis/AnalyticsTechnologyWIKI_wiki/2206/Homepage
+
+https://dev.azure.com/nestle-it/AnalyticsTechnologyWIKI/_wiki/wikis/AnalyticsTechnologyWIKI_wiki/9743/Nestle-Internal-Best-Practices
+
+CALL EDW_SBX.STG.CDF_GEN_EXTSTG_STG_LOAD_SP('CDF_SYN_LOG_CHANGE','/schema_change/BEVERAGES/');
+
+
+WINDOWS-1252
+
+...........
+PBI cur vs prev deviations backup copy
+
+need to focus on pre-requisities for P13
+6AA00DX68OH
+
+CONFECTIONARY
+2025P001
+
+Bulgaria PRODUCT_CODE INT changes has to implement before INT local loads.
+
+CROATIA is monthly delivery--P10 delivery canceled by source end
+
+IOE0926488843
+
+IBS team delivery calendar 
+----------------------
+https://nestle.sharepoint.com/:x:/r/teams/RetailDataAggregatorConfectionary/Shared Documents/References/Delivery Tracking Calendar/Delivery Tracking Calendar.xlsx?d=w97aacfd6785f44aab3950e6ab53f499e&csf=1&web=1&e=VAC51c&xsdata=MDV8MDJ8QmFsYWppLlJhbmd1QG5lc3RsZS5jb218NjNiNjViMDgwY2ZkNDQzZmIwNzgwOGRkM2FiOTc0MzR8MTJhM2FmMjNhNzY5NDY1NDg0N2Y5NThmM2Q0NzlmNGF8MHwwfDYzODczMTI5MDM3Mjk1MTg3MnxVbmtub3dufFRXRnBiR1pzYjNkOGV5SkZiWEIwZVUxaGNHa2lPblJ5ZFdVc0lsWWlPaUl3TGpBdU1EQXdNQ0lzSWxBaU9pSlhhVzR6TWlJc0lrRk9Jam9pVFdGcGJDSXNJbGRVSWpveWZRPT18MHx8fA%3d%3d&sdata=dEVRbmVFSmxnZEUzSThXWStzMzArQ2hycXdlKzFnSFJpdERBcnhTMEZpWT0%3d
+
+UK--48 week need to take confiermation
+
+Excessive weeks deletion no need to apply for AT,BX and KZ as these are monthly tags
+
+select * from STG.CONFEC_TRACKER_LOAD_SP;
+
+select * from STG.DATABASE_REFRESH_TRACKER where PRODUCT_CATEGORY='CONFECTIONARY';
+
+UPDATE STG.DATABASE_REFRESH_TRACKER SET FINAL_FACT_REFRESH='Y'  where NON_ADDITIVE_INTRIM='Y';
+
+UPDATE STG.DATABASE_REFRESH_TRACKER SET PRODUCT_STG='N',FACTDATA_STG='N',FCT_STG='N',MARKET_STG='N',PERIOD_STG='N',METADATA_STG='N'  
+ where country_code Not in('PT','CH','UK','PL','NO','IT','SK') AND PRODUCT_CATEGORY='CONFECTIONARY';
+
+epoch week 2024
+
+(top markets 8 like FR,IT,ES,PL,TR,CZ,DE,GB)
+
+22nd Before proceed dimension loads we need to check with Kranthi
+
+Innovation_reference need to take care P6 release(Maryna ping on 16/07 in confectionary source teams group)
+
+Nielsen
+IRI
+Kantara
+KPI's
+
+SOV(Share of Voice)
+SKU(Stock Keeping Units)
+
+
+final values/intrim values-1vc
+
+(top markets 8 like FR,IT,ES,PL,TR,CZ,DE,GB)
+
+Confectionary--4 views
+adhoc-v2--2 veiws
+
+promo markets
+levels
+Is your promo matching with adhocv2
+
+--Test case doc preparation
+--PROD dim second time refresh script
+
+
+razia.begum@nestle.com--help desk
+
+kpacademy
+https://kpacademy.azurewebsites.net/Home/Home
+
+EDM-Omni Customer	
+Customer Ingestion	Madhusudhan
+Customer Curation	
+Customer Syndication	
+Customer IR	MathCo(Sudipta,Harsh Saxena)
+Customer 360	
+Voice of Customer	
+Contact Center Reporting	LeenaReddy
+One Trust	Vijay
+L1 Support	
