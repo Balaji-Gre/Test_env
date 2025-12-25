@@ -1,0 +1,127 @@
+CREATE OR REPLACE PROCEDURE EDW_SBX.STG.CDF_GEN_EXTSTG_STG_LOAD_SP("TABLE_NAME" VARCHAR(16777216), "CATEGORY" VARCHAR(16777216))
+RETURNS VARCHAR(16777216)
+LANGUAGE JAVASCRIPT
+EXECUTE AS CALLER
+AS '   
+
+    var SP_DETAILS="";
+    var APP_ID="";
+    var SP_NAME="";
+    var DB="";
+    try
+    {
+       //Since using this as child sp, therefore commented, will be used in case it works as parent sp
+       //begin transaction
+       //snowflake.execute( {sqlText: "BEGIN TRANSACTION;"} );
+       
+        var get_db = snowflake.createStatement                                                                
+        (
+        {
+           sqlText: "SELECT CURRENT_DATABASE();"
+        }
+        );
+         var get_db_rs=get_db.execute();
+         get_db_rs.next();
+         DB=get_db_rs.getColumnValue(1);
+
+    //for testing purposes      
+//         var src_tbl_trunc_stmt = snowflake.createStatement
+//       (
+//       {
+//          sqlText: "TRUNCATE TABLE STG."+TABLE_NAME+";"
+//       }
+//       );
+//
+//       var trunc_rs = src_tbl_trunc_stmt.execute();
+          
+  
+   
+          
+
+        //step 1 : get schema and table details from control table 
+        var src_tbl_stmt = snowflake.createStatement
+        (
+        {
+           sqlText: "SELECT * FROM STG.CDF_SOURCE_CONTROL_TABLE WHERE SOURCE_SCHEMA=''EXT'' AND TARGET_TABLE =''"+TABLE_NAME+"'' AND CATEGORY_NAME =''"+CATEGORY+"'' AND ACTIVE_FLAG=''Y'';"
+        }
+        );
+
+        var rs = src_tbl_stmt.execute();
+        rs.next();
+
+
+        FILETYPE=rs.getColumnValue(2);
+        STAGE_PATH = rs.getColumnValue(7);
+        SOURCE_COLUMN=rs.getColumnValue(8);
+        TARGET_COLUMN=rs.getColumnValue(9);
+        FILE_FORMAT_NAME=rs.getColumnValue(11);
+        CATEGORY_NAME = rs.getColumnValue(10);
+        FILE_EXTENSION =rs.getColumnValue(14);
+        TYPEOFCATEGORY= rs.getColumnValue(15);
+        SP_NAME=rs.getColumnValue(16);
+        APP_ID=rs.getColumnValue(17);
+        NS_DATABASE=rs.getColumnValue(22);
+          
+        SP_DETAILS=""+SP_NAME+"("+TABLE_NAME+" , "+CATEGORY_NAME+" )";
+        
+          
+//        var   var_test_del_stmt="DELETE FROM  STG."+TABLE_NAME+" WHERE UPPER(NS_DATABASE)= UPPER(''"+NS_DATABASE+"'') ;"  
+//        return var_test_del_stmt ;  
+          
+//        var src_tbl_del_stmt = snowflake.createStatement
+//        (
+//        {
+//           sqlText: "DELETE FROM  STG."+TABLE_NAME+" WHERE UPPER(NS_DATABASE)= UPPER(''"+NS_DATABASE+"'') ;"
+//        }
+//        );
+//
+//        
+//        var del_rs = src_tbl_del_stmt.execute();
+//         del_rs.next();         
+          
+         //var stmt_to_exec = "COPY INTO STG." +TABLE_NAME+"("+TARGET_COLUMN+") FROM (SELECT DISTINCT "+SOURCE_COLUMN+" FROM @STG."+STAGE_PATH+CATEGORY_NAME+") FILE_FORMAT = (format_name=''STG."+FILE_FORMAT_NAME+"'') pattern = ''.*"+FILETYPE+"*.*"+FILE_EXTENSION+"'';"
+          
+         var ins_stmt = snowflake.createStatement                                                                
+        (
+        {
+           sqlText: "COPY INTO STG." +TABLE_NAME+"("+TARGET_COLUMN+") FROM (SELECT DISTINCT "+SOURCE_COLUMN+" FROM @STG."+STAGE_PATH+CATEGORY_NAME+") FILE_FORMAT = (format_name=''STG."+FILE_FORMAT_NAME+"'') pattern = ''.*"+FILETYPE+"*.*"+FILE_EXTENSION+"'';"
+           //sqlText: stmt_to_exec
+        }
+        );
+        var result = ins_stmt.execute();
+        result.next();
+        //var COUNT_AFTER=ins_stmt.getRowCount();
+        var COUNT_AFTER=ins_stmt.getNumRowsInserted();
+
+         // loading the audit table info
+        snowflake.execute( {sqlText: "CALL OPS.INT.WRITE_LOAD_LOG(''"+APP_ID+"'', ''"+DB+".STG."+TABLE_NAME+"'', ''Completed'',''Rows Loaded : "+COUNT_AFTER+";  in "+TABLE_NAME +".STG ;Load Completed with the SP "+SP_DETAILS+"'')"} );
+     
+        //Commit transaction if all completed
+       // snowflake.execute( {sqlText: "COMMIT;"} );
+         // Return a success/error indicator.;
+        return "Succeeded ";
+          //return "Succeeded ,"+stmt_to_exec;
+              
+      }
+          
+catch (err)  {
+             
+       //roll back transaction if there is any error.
+       //snowflake.execute( {sqlText: "ROLLBACK;"} );
+
+       var ERROR_MESSAGE = err.message.replace(/['']/g,"''").substring(0,350);
+       var FINAL_ERROR="Error Code : "+err.code+"; Error Message : "+ERROR_MESSAGE+"; in Child SP "+SP_DETAILS;
+
+     //call WRITE_LOAD_LOG stored procedure to update status
+    sp_write_to_log_failed_stmt = snowflake.createStatement(
+    {
+       sqlText: "CALL OPS.INT.WRITE_LOAD_LOG(?,?,?,?);",
+       binds:[APP_ID,DB+''.STG.''+TABLE_NAME,''Failed'', FINAL_ERROR]
+     }
+     );
+     res1 = sp_write_to_log_failed_stmt.execute();
+          
+     // Return a success/error indicator.
+     return FINAL_ERROR;
+} 
+';
