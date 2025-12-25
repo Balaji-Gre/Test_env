@@ -1,0 +1,89 @@
+CREATE OR REPLACE PROCEDURE EDW_SBX.STG.CDF_MKT_GEN_MERGE_SCD1_CONFEC_SP("SRC_TABLE" VARCHAR(16777216), "TGT_TABLE" VARCHAR(16777216), "MARKET" VARCHAR(16777216))
+RETURNS VARCHAR(16777216)
+LANGUAGE JAVASCRIPT
+EXECUTE AS CALLER
+AS '
+    var SP_DETAILS="";
+    var SP_NAME="";
+     var APP_ID="";
+       
+
+ try
+    {
+
+    //begin transaction
+    snowflake.execute( {sqlText: "BEGIN TRANSACTION;"} );
+
+    var sel_stmt=snowflake.createStatement(
+    {  
+       sqlText:"SELECT * from STG.CDF_SOURCE_CONTROL_TABLE WHERE TARGET_SCHEMA=''INT'' AND ACTIVE_FLAG=''Y'' AND SOURCE_TABLE= ''"+SRC_TABLE+"'' AND  TARGET_TABLE= ''"+TGT_TABLE+"'' AND MARKETNAME=''"+MARKET+"'' ;"
+    }
+    );
+    var sel_res=sel_stmt.execute();
+    sel_res.next();
+     src_schema=sel_res.getColumnValue(3);
+     tgt_schema=sel_res.getColumnValue(4);
+     src_cols=sel_res.getColumnValue(8);
+     tgt_cols=sel_res.getColumnValue(9);
+     updt_cols=sel_res.getColumnValue(12);
+     SP_NAME=sel_res.getColumnValue(16);
+     APP_ID=sel_res.getColumnValue(17);
+              
+     SP_DETAILS=""+SP_NAME+"("+SRC_TABLE+","+TGT_TABLE+","+MARKET+")";         
+              
+     var stg_cnt_stmt = snowflake.createStatement(
+            {
+               sqlText: "SELECT COUNT(*) FROM INT."+TGT_TABLE+";"
+            }
+            );          
+        
+            // execute staging table count query
+            var rowcount_staging = stg_cnt_stmt.execute();
+            rowcount_staging.next()
+            var COUNT_BEFORE = rowcount_staging.getColumnValue(1);
+    
+
+     	var ins_stmt=snowflake.createStatement(
+    {
+    sqlText:"MERGE INTO "+tgt_schema+"."+TGT_TABLE+" tgt USING ( SELECT * FROM "+src_schema+"."+SRC_TABLE+"  ) src ON tgt.KEYCOLS_HASH=src.KEYCOLS_HASH WHEN MATCHED AND tgt.ALLCOLS_HASH != src.ALLCOLS_HASH THEN UPDATE SET "+updt_cols+"   WHEN NOT MATCHED THEN INSERT("+tgt_cols+") VALUES ("+src_cols+")"
+      //sqlText:merge_stmt
+    }
+    );   
+    
+    
+     ins_stmt.execute();
+     var UPDATED_ROWS=ins_stmt.getNumRowsUpdated(); 
+     var INSERTED_ROWS=ins_stmt.getNumRowsInserted();
+      
+    
+     snowflake.execute( {sqlText: "CALL OPS.INT.WRITE_LOAD_LOG(''"+APP_ID+"'', ''"+SP_NAME+"'', ''Completed'',''Rows Before : "+COUNT_BEFORE+"; Inserted : "+INSERTED_ROWS+"; Updated : "+UPDATED_ROWS+"; in "+TGT_TABLE +";Load from STG to INT Completed with SP "+SP_DETAILS+"'')"} );
+    
+     //Commit transaction if all completed
+          snowflake.execute( {sqlText: "COMMIT;"} );
+          return "Succeeded."; // Return a success/error indicator. 
+    
+    }
+    
+     catch (err)  {
+
+    //roll back transaction if there is any error.
+    snowflake.execute( {sqlText: "ROLLBACK;"} );
+    
+   // set final error message to be loaded in log table
+    var ERROR_MESSAGE = err.message.replace(/['']/g,"''").substring(0,350);
+    var FINAL_ERROR="Error Code : "+err.code+"; Error Message : "+ERROR_MESSAGE+"; in Child SP "+SP_DETAILS;
+    
+    //call WRITE_LOAD_LOG stored procedure to update status  
+   sp_write_to_log_failed_stmt = snowflake.createStatement(
+   {
+      sqlText: "CALL OPS.INT.WRITE_LOAD_LOG(?,?,?,?);",
+      binds:[APP_ID,SP_NAME,''Failed'', FINAL_ERROR]
+    }
+    );
+    res1 = sp_write_to_log_failed_stmt.execute();
+
+    return FINAL_ERROR;  // Return a success/error indicator.                 
+}     
+      
+           
+';
