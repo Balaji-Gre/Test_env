@@ -1,0 +1,149 @@
+CREATE OR REPLACE PROCEDURE EDW_SBX.STG.CDF_SYN_FACTDATA_ADDITIVE_BEV_SP("SRC_TABLE" VARCHAR(16777216), "TGT_TABLE" VARCHAR(16777216))
+RETURNS VARCHAR(16777216)
+LANGUAGE JAVASCRIPT
+EXECUTE AS CALLER
+AS '
+
+   var SP_DETAILS="";
+   var APP_ID=""; 
+   var SP_NAME="";
+try
+{   
+       //begin transaction
+       snowflake.execute( {sqlText: "BEGIN TRANSACTION;"} )
+
+      var dv="";
+      var source_table_stmt = snowflake.createStatement
+    (
+    {
+       sqlText: "SELECT * FROM STG.CDF_SOURCE_CONTROL_TABLE WHERE SOURCE_TABLE=''"+SRC_TABLE+"'' AND TARGET_TABLE =''"+TGT_TABLE+"'' AND TARGET_SCHEMA=''INT'' AND ACTIVE_FLAG=''Y'';"
+    }
+    );
+    var rs = source_table_stmt.execute();
+    rs.next();
+    MARKETNAME=rs.getColumnValue(1);  
+    SOURCE_SCHEMA=rs.getColumnValue(3);
+    TARGET_SCHEMA=rs.getColumnValue(4);
+    SOURCE_TABLE=rs.getColumnValue(5);
+    TARGET_TABLE=rs.getColumnValue(6);        
+    SOURCE_COLUMN=rs.getColumnValue(8);
+    //TARGET_COLUMN=rs.getColumnValue(9);
+	TARGET_COLUMN="FK_D_MKT_ID, FK_PROD_ID, FK_PROD_ID_LOCAL, FK_GEO_ID, FK_DATEKEY, FK_METADATA_LOCAL, FK_CURRENCY_ID, COUNTRY_CODE, MKT_TAG, PROD_TAG, PER_TAG, DATEKEY, UNITS, VALUE, VOLUME, PROMO_VOLUME, NON_PROMO_VOLUME, BASE_VOLUME, PROMO_UNIT, PROMO_VALUE, BASELINE_SALES_UNIT, BASELINE_SALES_VALUE, INSERT_TIMESTAMP, COUNTRY, CATEGORY, ALLCOLS_HASH, KEYCOLS_HASH, NO_OF_STORES_UNIVERSE, FK_MKT_ID_LOCAL, VOLUME_CUPS, PROMO_VOLUME_CUPS"
+	CATEGORY=rs.getColumnValue(10);
+    SELECT_COLUMN=rs.getColumnValue(12);
+    SP_NAME=rs.getColumnValue(16);
+    APP_ID=rs.getColumnValue(17);
+    SP_DETAILS=""+SP_NAME+"("+SRC_TABLE+","+TGT_TABLE+")" ;
+    dv=rs.getColumnValue(18);
+   
+      
+    sp_del_stmt = snowflake.createStatement(
+    {
+           sqlText: "DELETE FROM "+TARGET_SCHEMA+"."+TARGET_TABLE+" WHERE COUNTRY=''"+MARKETNAME+"'' AND CONCAT(''/'', CATEGORY)=''"+CATEGORY+"'';"
+		   
+		   //need to incorporate deletion logic to restrict to only periods that are present in STG
+           
+    }
+    );
+    //del_res = sp_del_stmt.execute();
+	
+	//var COUNT_DELETE=sp_del_stmt.getNumRowsDeleted();
+      
+      additive_query="INSERT INTO "+TARGET_SCHEMA+"."+TARGET_TABLE+"("+TARGET_COLUMN+")"+
+      "WITH "+
+      "factdata as ( select "+SOURCE_COLUMN+" FROM "+SOURCE_SCHEMA+"."+SOURCE_TABLE+"),"+
+      "dim_geographhy as (select sk_geo_id,trim(upper(country)) as ucountry,country_code from INT.CDF_SYN_DIM_GEOGRAPHY),"+
+      "dim_prod_local as (select sk_prod_id as sk_prod_id_local,prod_tag,trim(upper(country)) as country, trim(upper(category_name)) as category from INT.CDF_SYN_DIM_PRODUCT_LOCAL),"+
+	  "dim_mkt_local as (select sk_mkt_id as sk_mkt_id_local,mkt_tag,trim(upper(country)) as m_country, trim(upper(category)) as m_category, IFF(EQUAL_NULL(REGEXP_SUBSTR(HIER_NAME, ''^[0-9]*''),NULL),'''',REGEXP_SUBSTR(HIER_NAME, ''^[0-9]*'')) as mkt_hier_code_local from INT.CDF_SYN_DIM_MARKET_LOCAL),"+
+      "dim_market_customer as (SELECT SK_MKT_ID,trim(upper(MKT_TAG)) as MKT_TAG,upper(trim(country)) as country, trim(upper(CATEGORY_NAME)) as mkt_category, IFF(EQUAL_NULL(REGEXP_SUBSTR(MKT_HIER_NAME, ''^[0-9]*''),NULL),'''',REGEXP_SUBSTR(MKT_HIER_NAME, ''^[0-9]*'')) as mkt_hier_code FROM INT.CDF_SYN_DIM_MARKET_CUSTOMER_HARMONIZED ),"+
+      "dim_prod_harmonized as (select sk_prod_id as sk_prod_id_harmonized,trim(upper(prod_tag)) as prod_tag,COUNTRY, trim(upper(CATEGORY_NAME)) AS ph_category_name, UPPER(TRIM(COUNTRY_CODE)) AS ph_country_code from INT.CDF_SYN_DIM_PRODUCT_HARMONIZED)  ,"+
+      "dim_date as (SELECT sk_id as sk_date_key,CONCAT(PERIOD_TYPE, ''_M'', CALENDAR_YEAR, CALENDAR_MONTH, ''_W'', ISOWEEK_YEAR, ISOWEEK_INDEX) AS DATEKEY,trim(upper(PERIOD_TAG)) AS PERIOD_LOCAL, COUNTRY_CODE as d_country_code, trim(upper(CATEGORY)) as d_category_name, MULT_FACTOR as mult_factor FROM INT.CDF_SYN_DIM_PERIOD)    ,    "+
+      "dim_currency as (SELECT sk_currency_id as sk_currency_id,trim(upper(country)) as RC_COUNTRY, COUNTRY_CODE AS RC_COUNTRY_CODE, YEAR FROM INT.CDF_SYN_DIM_CURRENCY WHERE YEAR = (SELECT MAX(TO_NUMBER(YEAR)) FROM INT.CDF_SYN_DIM_CURRENCY)) "+
+      " select IFNULL(dim_market_customer.sk_mkt_id,''"+dv+"'') AS FK_D_MKT_ID ,IFNULL(dim_prod_harmonized.sk_prod_id_harmonized,''"+dv+"'') as FK_PROD_ID, IFNULL(dim_prod_local.sk_prod_id_local,''"+dv+"'') as FK_PROD_ID_LOCAL,"+
+      "IFNULL(dim_geographhy.sk_geo_id,''"+dv+"'') as FK_GEO_ID,IFNULL(dim_date.sk_date_key,''"+dv+"'') as FK_DATEKEY,0 as FK_METADATA_LOCAL,IFNULL(dim_currency.sk_currency_id,''"+dv+"'') as FK_CURRENCY_ID,dim_geographhy.country_code as COUNTRY_CODE,"+
+      "factdata.MKT_TAG as FD_MKT_TAG,factdata.PROD_TAG as FD_PROD_TAG,factdata.PER_TAG as FD_PER_TAG,dim_date.DATEKEY AS FD_DATEKEY,(TO_DOUBLE(factdata.UNITS)*dim_date.mult_factor) as UNITS,(TO_DOUBLE(factdata.VALUE)*dim_date.mult_factor) as VALUE,"+
+      "(TO_DOUBLE(factdata.VOLUME)*dim_date.mult_factor) as VOLUME ,(TO_DOUBLE(factdata.PROMO_VOLUME)*dim_date.mult_factor) as PROMO_VOLUME,(TO_DOUBLE(factdata.NON_PROMO_VOLUME)*dim_date.mult_factor) as NON_PROMO_VOLUME, "+
+     "(TO_DOUBLE(factdata.BASE_VOLUME)*dim_date.mult_factor) as BASE_VOLUME, (TO_DOUBLE(factdata.PROMO_UNIT)*dim_date.mult_factor) as PROMO_UNIT, (TO_DOUBLE(factdata.PROMO_VALUE)*dim_date.mult_factor) as PROMO_VALUE, (TO_DOUBLE(factdata.BASELINE_SALES_UNIT)*dim_date.mult_factor) as BASELINE_SALES_UNIT, (TO_DOUBLE(factdata.BASELINE_SALES_VALUE)*dim_date.mult_factor) as BASELINE_SALES_VALUE, "+
+      "CURRENT_TIMESTAMP AS INSERT_TIMESTAMP, factdata.Country as FD_COUNTRY,factdata.Category as FD_CATEGORY, "+
+      "MD5(CONCAT(IFF(EQUAL_NULL(FK_D_MKT_ID,NULL),'''',FK_D_MKT_ID),IFF(EQUAL_NULL(FK_PROD_ID,NULL),'''',FK_PROD_ID),IFF(EQUAL_NULL(FK_PROD_ID_LOCAL,NULL),'''',FK_PROD_ID_LOCAL),"+
+      "IFF(EQUAL_NULL(FK_GEO_ID,NULL),'''',FK_GEO_ID),IFF(EQUAL_NULL(FK_DATEKEY,NULL),'''',FK_DATEKEY),"+
+      "IFF(EQUAL_NULL(FK_CURRENCY_ID,NULL),'''',FK_CURRENCY_ID),IFF(EQUAL_NULL(COUNTRY_CODE,NULL),'''',COUNTRY_CODE),"+
+      "IFF(EQUAL_NULL(FD_MKT_TAG,NULL),'''',FD_MKT_TAG),IFF(EQUAL_NULL(FD_PROD_TAG,NULL),'''',FD_PROD_TAG),IFF(EQUAL_NULL(FD_PER_TAG,NULL),'''',FD_PER_TAG),IFF(EQUAL_NULL(FD_DATEKEY,NULL),'''',FD_DATEKEY),"+
+      "IFF(EQUAL_NULL(UNITS,NULL),'''',UNITS),"+
+      "IFF(EQUAL_NULL(VALUE,NULL),'''',VALUE),IFF(EQUAL_NULL(VOLUME,NULL),'''',VOLUME), "+
+      "IFF(EQUAL_NULL(PROMO_VOLUME,NULL),'''',PROMO_VOLUME),"+
+      "IFF(EQUAL_NULL(NON_PROMO_VOLUME,NULL),'''',NON_PROMO_VOLUME), "+
+	  "IFF(EQUAL_NULL(BASE_VOLUME,NULL),'''',BASE_VOLUME),IFF(EQUAL_NULL(PROMO_UNIT,NULL),'''',PROMO_UNIT),IFF(EQUAL_NULL(PROMO_VALUE,NULL),'''',PROMO_VALUE),IFF(EQUAL_NULL(BASELINE_SALES_UNIT,NULL),'''',BASELINE_SALES_UNIT),IFF(EQUAL_NULL(BASELINE_SALES_VALUE,NULL),'''',BASELINE_SALES_VALUE), IFF(EQUAL_NULL(VOLUME_CUPS,NULL),'''',VOLUME_CUPS), IFF(EQUAL_NULL(PROMO_VOLUME_CUPS,NULL),'''',PROMO_VOLUME_CUPS), IFF(EQUAL_NULL(NO_OF_STORES_UNIVERSE,NULL),'''',NO_OF_STORES_UNIVERSE), IFF(EQUAL_NULL(dim_mkt_local.sk_mkt_id_local,NULL),'''',dim_mkt_local.sk_mkt_id_local), "+
+	  "IFF(EQUAL_NULL(FD_COUNTRY,NULL),'''',FD_COUNTRY),IFF(EQUAL_NULL(FD_CATEGORY,NULL),'''',FD_CATEGORY))) AS ALLCOLS_HASH"+
+      " ,MD5(CONCAT(IFF(EQUAL_NULL(FD_MKT_TAG,NULL), '''',FD_MKT_TAG),IFF(EQUAL_NULL(dim_mkt_local.sk_mkt_id_local,NULL),'''',dim_mkt_local.sk_mkt_id_local),IFF(EQUAL_NULL(FD_PROD_TAG,NULL),'''',FD_PROD_TAG),IFF(EQUAL_NULL(FD_PER_TAG,NULL), '''',FD_PER_TAG),IFF(EQUAL_NULL(FD_DATEKEY,NULL), '''',FD_DATEKEY))) AS KEYCOLS_HASH, "+
+	  "(TO_DOUBLE(factdata.NO_OF_STORES_UNIVERSE)*dim_date.mult_factor) as NO_OF_STORES_UNIVERSE, "+ "IFNULL(dim_mkt_local.sk_mkt_id_local,''"+dv+"'') as FK_MKT_ID_LOCAL, "+ 
+	  "(TO_DOUBLE(factdata.VOLUME_CUPS)*dim_date.mult_factor) as VOLUME_CUPS, (TO_DOUBLE(factdata.PROMO_VOLUME_CUPS)*dim_date.mult_factor) as PROMO_VOLUME_CUPS "+
+      " from factdata left join dim_geographhy on trim(upper(factdata.country))=dim_geographhy.ucountry "+
+	  " left join dim_prod_local on upper(trim(factdata.prod_tag))=upper(trim(dim_prod_local.prod_tag)) and trim(upper(factdata.country))=dim_prod_local.country and trim(upper(factdata.CATEGORY))=dim_prod_local.category "+
+      " left join dim_mkt_local on upper(trim(factdata.mkt_tag))=upper(trim(dim_mkt_local.mkt_tag))  and trim(upper(factdata.country))=dim_mkt_local.m_country and trim(upper(factdata.CATEGORY))=dim_mkt_local.m_category "+
+	  " left join dim_currency ON dim_geographhy.country_code=dim_currency.RC_COUNTRY_CODE "+  
+      " left join dim_market_customer on trim(upper(factdata.MKT_TAG)) = dim_market_customer.MKT_TAG and dim_geographhy.COUNTRY_CODE = dim_market_customer.COUNTRY and trim(upper(factdata.CATEGORY)) = dim_market_customer.mkt_category and dim_mkt_local.mkt_hier_code_local = dim_market_customer.mkt_hier_code "+
+	  " left join dim_prod_harmonized  on trim(upper(factdata.prod_tag))=dim_prod_harmonized.prod_tag  and  trim(upper(factdata.CATEGORY))=dim_prod_harmonized.ph_category_name and dim_geographhy.country_code = dim_prod_harmonized.ph_country_code"+
+	  " left join dim_date ON trim(upper(factdata.PER_TAG))=dim_date.PERIOD_LOCAL and dim_geographhy.country_code=dim_date.d_country_code and trim(upper(factdata.CATEGORY))=dim_date.d_category_name " ;
+	  
+      
+      
+      //return additive_query;
+      
+     merge_stmt="MERGE INTO "+TARGET_SCHEMA+"."+TARGET_TABLE+" tgt USING ("+additive_query+") src ON tgt.KEYCOLS_HASH=src.KEYCOLS_HASH WHEN MATCHED AND tgt.ALLCOLS_HASH != src.ALLCOLS_HASH THEN UPDATE SET "+
+    "tgt.FK_D_MKT_ID=src.FK_D_MKT_ID,tgt.FK_PROD_ID =src.FK_PROD_ID ,tgt.FK_PROD_ID_LOCAL =src.FK_PROD_ID_LOCAL ,tgt.FK_GEO_ID =src.FK_GEO_ID , tgt.FK_DATEKEY = src.FK_DATEKEY, tgt.FK_METADATA_LOCAL =src.FK_METADATA_LOCAL ,tgt.FK_CURRENCY_ID =src.FK_CURRENCY_ID ,"+
+    "tgt.COUNTRY_CODE =src.COUNTRY_CODE ,tgt.MKT_TAG =src.FD_MKT_TAG ,tgt.PROD_TAG =src.FD_PROD_TAG ,tgt.PER_TAG =src.FD_PER_TAG , tgt.DATEKEY = src.FD_DATEKEY, tgt.UNITS =src.UNITS  ,  tgt.VALUE  =src.VALUE  ,"+ 
+    "tgt.VOLUME =src.VOLUME ,tgt.PROMO_VOLUME=src.PROMO_VOLUME ,tgt.NON_PROMO_VOLUME =src.NON_PROMO_VOLUME , "+
+   "tgt.BASE_VOLUME = src.BASE_VOLUME, tgt.PROMO_UNIT = src.PROMO_UNIT, tgt.PROMO_VALUE = src.PROMO_VALUE, tgt.BASELINE_SALES_UNIT = src.BASELINE_SALES_UNIT, tgt.BASELINE_SALES_VALUE = src.BASELINE_SALES_VALUE, "+
+    "tgt.Country =src.FD_Country,tgt.CATEGORY=src.FD_CATEGORY , tgt.ALLCOLS_HASH=src.ALLCOLS_HASH ,tgt.KEYCOLS_HASH=src.KEYCOLS_HASH, "+
+	"tgt.NO_OF_STORES_UNIVERSE = src.NO_OF_STORES_UNIVERSE, tgt.FK_MKT_ID_LOCAL = src.FK_MKT_ID_LOCAL, tgt.VOLUME_CUPS = src.VOLUME_CUPS, tgt.PROMO_VOLUME_CUPS = src.PROMO_VOLUME_CUPS "+
+    "WHEN NOT MATCHED THEN INSERT(FK_D_MKT_ID, FK_PROD_ID, FK_PROD_ID_LOCAL, FK_GEO_ID, FK_DATEKEY, FK_METADATA_LOCAL, FK_CURRENCY_ID, COUNTRY_CODE, MKT_TAG, PROD_TAG, PER_TAG, DATEKEY, UNITS, VALUE, VOLUME, PROMO_VOLUME, NON_PROMO_VOLUME, BASE_VOLUME, PROMO_UNIT, PROMO_VALUE, BASELINE_SALES_UNIT, BASELINE_SALES_VALUE, INSERT_TIMESTAMP, COUNTRY, CATEGORY, ALLCOLS_HASH, KEYCOLS_HASH, NO_OF_STORES_UNIVERSE, FK_MKT_ID_LOCAL, VOLUME_CUPS, PROMO_VOLUME_CUPS) "+
+    "VALUES (src.FK_D_MKT_ID ,src.FK_PROD_ID ,src.FK_PROD_ID_LOCAL ,src.FK_GEO_ID, src. FK_DATEKEY, src.FK_METADATA_LOCAL ,src.FK_CURRENCY_ID ,src.COUNTRY_CODE ,src.FD_MKT_TAG ,src.FD_PROD_TAG ,src.FD_PER_TAG , src.FD_DATEKEY, src.UNITS,"+ 
+    " src.VALUE  ,  src.VOLUME ,src.PROMO_VOLUME ,src.NON_PROMO_VOLUME ,src.BASE_VOLUME, src.PROMO_UNIT, src.PROMO_VALUE, src.BASELINE_SALES_UNIT, src.BASELINE_SALES_VALUE, src.INSERT_TIMESTAMP, src.FD_Country ,src.FD_CATEGORY ,src.ALLCOLS_HASH ,src.KEYCOLS_HASH, src.NO_OF_STORES_UNIVERSE, src.FK_MKT_ID_LOCAL, src.VOLUME_CUPS, src.PROMO_VOLUME_CUPS)" 
+      
+    var sel_final=snowflake.createStatement(
+    {
+    sqlText:additive_query
+    //sqlText:merge_stmt
+    }
+    );
+             
+    var sel_res=sel_final.execute();
+    sel_res.next();
+    
+    var COUNT_AFTER=sel_final.getNumRowsInserted();
+                
+    var COUNT_UPDATE=sel_final.getNumRowsUpdated();
+     
+    snowflake.execute( {sqlText: "CALL OPS.INT.WRITE_LOAD_LOG(''"+APP_ID+"'', ''"+SP_NAME+"'', ''Completed'',''Rows Inserted : "+COUNT_AFTER+"; Updated : "+COUNT_UPDATE+"; in "+TGT_TABLE+";Load from STG to INT completed with help of SP "+SP_DETAILS+"'')"} );
+    
+    
+    //Commit transaction if all completed
+    snowflake.execute( {sqlText: "COMMIT;"} );
+    return "success";
+
+          
+}
+catch (err) {
+
+         //roll back transaction if there is any error.
+        snowflake.execute( {sqlText: "ROLLBACK;"} );
+         
+         // set final error message to be loaded in log table
+         var ERROR_MESSAGE = err.message.replace(/['']/g,"''").substring(0,350);
+         var FINAL_ERROR="Error Code : "+err.code+"; Error Message : "+ERROR_MESSAGE+"; in Child SP "+SP_DETAILS;
+      
+        //call WRITE_LOAD_LOG stored procedure to update status
+       sp_write_to_log_failed_stmt = snowflake.createStatement(
+       {
+          sqlText: "CALL OPS.INT.WRITE_LOAD_LOG(?,?,?,?);",
+          binds:[APP_ID,SP_NAME,''Failed'', FINAL_ERROR]
+        }
+        );
+        res1 = sp_write_to_log_failed_stmt.execute();
+
+
+        return FINAL_ERROR;// Return a success/error indicator.    
+}
+
+';
